@@ -253,7 +253,7 @@ def plot_vswr(data, directory=''):
     return
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser(description='SuperDARN Canada© -- Engineering Diagnostic Tools Kit: '
                                                  '(Rohde & Schwarz Data Plotting) '
                                                  'Given a set of Rohde & Schwarz ZVH files that have been converted to'
@@ -286,3 +286,8 @@ if __name__ == '__main__':
     else:
         print('Select a mode: vswr or path')
 
+    return None
+
+
+if __name__ == '__main__':
+    main()
