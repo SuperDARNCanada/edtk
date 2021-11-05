@@ -1,9 +1,14 @@
-# Copyright 2021 SuperDARN Canada, University of Saskatchewan
-# Author: Remington Rohel
 """
-This file contains functions for converting antennas_iq files
-to bfiq files.
+SuperDARN Canada© -- Engineering Diagnostic Tools Kit: (Data Converting & Post Processing)
+
+Author(s): Marci Detwiller, Adam Lozinsky, Remington Rohel
+Date: November 5, 2021
+Affiliation: University of Saskatchewan
+
+This file contains the antennas_iq_to_bfiq() function and associated helper functions. The primary purpose is
+post processing of antennas_iq.site and antennas_iq.array borealis data files.
 """
+
 import itertools
 import subprocess as sp
 import math
@@ -23,65 +28,78 @@ else:
 
 import logging
 
-postprocessing_logger = logging.getLogger('borealis_postprocessing')
+postprocessing_logger = logging.getLogger('convert')
 
 
-def get_phshift(beamdir, freq, antenna, pulse_shift, num_antennas, antenna_spacing,
-                centre_offset=0.0):
+def phase_shift(beam_direction, frequency, antenna, pulse_shift, num_antennas, antenna_spacing, center_offset=0.0):
     """
     Find the phase shift for a given antenna and beam direction.
     Form the beam given the beam direction (degrees off boresite), the tx frequency, the antenna number,
     a specified extra phase shift if there is any, the number of antennas in the array, and the spacing
     between antennas.
-    :param beamdir: the azimuthal direction of the beam off boresight, in degrees, positive beamdir being to
-        the right of the boresight (looking along boresight from ground). This is for this antenna.
-    :param freq: transmit frequency in kHz
-    :param antenna: antenna number, INDEXED FROM ZERO, zero being the leftmost antenna if looking down the boresight
-        and positive beamdir right of boresight
-    :param pulse_shift: in degrees, for phase encoding
-    :param num_antennas: number of antennas in this array
-    :param antenna_spacing: distance between antennas in this array, in meters
-    :param centre_offset: the phase reference for the midpoint of the array. Default = 0.0, in metres.
-     Important if there is a shift in centre point between arrays in the direction along the array.
-     Positive is shifted to the right when looking along boresight (from the ground).
-    :returns phshift: a phase shift for the samples for this antenna number, in radians.
+
+    Parameters
+    ----------
+        beam_direction :
+            The azimuthal direction of the beam off boresight, in degrees, positive beamdir being to the right of the
+            boresight (looking along boresight from ground). This is for this antenna.
+        frequency:
+            Transmit frequency in kHz.
+        antenna :
+            Antenna number, INDEXED FROM ZERO, zero being the leftmost antenna if looking down the boresight
+            and positive beamdir right of boresight.
+        pulse_shift :
+            in degrees, for phase encoding.
+        num_antennas :
+            Number of antennas in this array.
+        antenna_spacing :
+            Distance between antennas in this array, in meters
+        center_offset :
+            The phase reference for the midpoint of the array. Default = 0.0, in metres. Important if there is a shift
+            in centre point between arrays in the direction along the array. Positive is shifted to the right when
+            looking along boresight (from the ground).
+
+    Returns
+    -------
+        phase :
+            A phase shift for the samples for this antenna number, in radians.
     """
-    freq = freq * 1000.0  # convert to Hz.
 
-    # Convert to radians
-    beamrad = math.pi * np.float64(beamdir) / 180.0
+    wavelength = speed_of_light / (frequency * 1000.0)
+    separation = ((num_antennas - 1) / 2.0 - antenna) * antenna_spacing + center_offset
+    phase = (2 * np.pi * separation / wavelength) * np.cos(np.pi / 2.0 - np.deg2rad(beam_direction))
+    phase += np.rad2deg(pulse_shift)
+    phase = np.fmod(phase, 2 * np.pi)
 
-    # Pointing to right of boresight, use point in middle (hypothetically antenna 7.5) as phshift=0
-    phshift = 2 * math.pi * freq * \
-              (((num_antennas - 1) / 2.0 - antenna) * antenna_spacing + centre_offset) * \
-              math.cos(math.pi / 2.0 - beamrad) / speed_of_light
-
-    phshift = phshift + math.radians(pulse_shift)
-
-    # Bring into range (-2*pi, 2*pi)
-    phshift = math.fmod(phshift, 2 * math.pi)
-
-    return phshift
+    return phase
 
 
-def shift_samples(basic_samples, phshift, amplitude):
+def shift_samples(samples, phase, amplitude):
     """
-    Shift samples for a pulse by a given phase shift.
-    Take the samples and shift by given phase shift in rads and adjust amplitude as
-    required for imaging.
-    :param basic_samples: samples for this pulse, numpy array
-    :param phshift: phase for this antenna to offset by in rads, float
-    :param amplitude: amplitude for this antenna (= 1 if not imaging), float
-    :returns samples: basic_samples that have been shaped for the antenna for the
-     desired beam.
+    Shift samples for a pulse by a given phase shift. Take the samples and shift by given phase shift in radians
+    then adjust amplitude as required for imaging.
+
+    Parameters
+    ----------
+        samples : complex32 np.array
+            Complex samples for this pulse.
+        phase: float np.array
+            Phase shift for specific antenna to offset by in radians.
+        amplitude :
+            amplitude for this antenna (= 1 if not imaging), float
+
+    Returns
+    -------
+        samples : complex32 np.array
+            Samples that have been shaped for the antenna for the desired beam.
     """
-    # print(len(phshift), len(phshift[0]), len(basic_samples), len(basic_samples[0]))
-    samples = amplitude * np.exp(1j * phshift) * basic_samples
+    print(phase.shape)
+    samples *= amplitude * np.exp(1j * phase)
 
     return samples
 
 
-def beamform(antennas_data, beamdirs, rxfreq, antenna_spacing, pulse_phase_offset):
+def beamform(antennas_data, beam_directions, frequency, antenna_spacing, pulse_phase_offset):
     """
     :param antennas_data: numpy array of dimensions num_antennas x num_samps. All antennas are assumed to be
     from the same array and are assumed to be side by side with antenna spacing 15.24 m, pulse_shift = 0.0
@@ -93,30 +111,20 @@ def beamform(antennas_data, beamdirs, rxfreq, antenna_spacing, pulse_phase_offse
     """
     beamformed_data = []
 
-    # [num_antennas, num_samps]
+    antennas = np.arange(antennas_data.shape[0])
     num_antennas, num_samps = antennas_data.shape
     num_pulses = len(pulse_phase_offset)
 
     # Loop through all beam directions
-    for beam_direction in beamdirs:
-        antenna_phase_shifts = []
-
-        # Get phase shift for each antenna
-        for antenna in range(num_antennas):
-            phase_shift = get_phshift(beam_direction,
-                                      rxfreq,
-                                      antenna,
-                                      0.0,
-                                      num_antennas,
-                                      antenna_spacing)
-            # Bring into range (-2*pi, 2*pi) and negate
-            phase_shift = math.fmod((1 * phase_shift), 2 * math.pi)
-            antenna_phase_shifts.append(phase_shift)
-
+    for beam_direction in beam_directions:
+        antenna_phase_shifts = \
+            phase_shift(beam_direction, frequency, antennas, 0.0, num_antennas, antenna_spacing)
         # TODO: Figure out decoding phase here
-        # Apply phase shift to data from respective antenna
-        phased_antenna_data = [shift_samples(antennas_data[i], antenna_phase_shifts[i], 1.0) for i in
-                               range(num_antennas)]
+        # Apply phase shift to data from respective
+        phased_antenna_data = \
+            shift_samples(antennas_data, np.tile(antenna_phase_shifts, (1, antennas_data.shape[1])), 1.0)
+        # phased_antenna_data = [shift_samples(antennas_data[i], antenna_phase_shifts[i], 1.0) for i in
+        #                        range(num_antennas)]
         phased_antenna_data = np.array(phased_antenna_data)
 
         # Sum across antennas to get beamformed data
@@ -216,7 +224,6 @@ def beamform_record(record):
     main_beamformed_data = np.array([], dtype=np.complex64)
     intf_beamformed_data = np.array([], dtype=np.complex64)
     main_antenna_count = record['main_antenna_count']
-    intf_antenna_count = record['intf_antenna_count']
 
     # TODO: Grab these values from somewhere
     main_antenna_spacing = 15.24
@@ -273,8 +280,10 @@ def antennas_iq_to_bfiq(infile, outfile):
     :type  outfile:     String
     :return:            Path to bfiq site file
     """
+
     def convert_to_numpy(data):
-        """Converts lists stored in dict into numpy array. Recursive.
+        """
+        Converts lists stored in dict into numpy array. Recursive.
         Args:
             data (Python dictionary): Dictionary with lists to convert to numpy arrays.
         """
@@ -296,7 +305,7 @@ def antennas_iq_to_bfiq(infile, outfile):
     # Convert each record to bfiq record
     for record in records:
         beamformed_record = beamform_record(bfiq_group[record])
-        
+
         # Convert to numpy arrays for saving to file with deepdish
         formatted_record = convert_to_numpy(beamformed_record)
 
