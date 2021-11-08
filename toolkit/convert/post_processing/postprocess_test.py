@@ -3,8 +3,11 @@ import pydarnio
 from toolkit.convert.post_processing import antennas_iq_to_bfiq as ab
 
 
-test_file = '/home/glatteis/SuperDARN/data/post_process_sample/20211006.2132.00.sas.0.antennas_iq.hdf5.site'
-compare_file = '/home/glatteis/SuperDARN/data/post_process_sample/20211006.2132.00.sas.0.bfiq.hdf5.site'
+# test_file = '/home/glatteis/SuperDARN/data/post_process_sample/20211006.2132.00.sas.0.antennas_iq.hdf5.site'
+# compare_file = '/home/glatteis/SuperDARN/data/post_process_sample/20211006.2132.00.sas.0.bfiq.hdf5.site'
+test_file = 'F://superdarn/data/sample_data/20211006.2132.00.sas.0.antennas_iq.hdf5.site'
+compare_file = 'F://superdarn/data/sample_data//20211006.2132.00.sas.0.bfiq.hdf5.site'
+
 
 test_data = pydarnio.BorealisRead(test_file, 'antennas_iq', 'site').records
 compare_data = pydarnio.BorealisRead(compare_file, 'bfiq', 'site').records

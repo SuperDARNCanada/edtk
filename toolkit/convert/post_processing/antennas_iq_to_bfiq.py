@@ -11,7 +11,6 @@ post processing of antennas_iq.site and antennas_iq.array borealis data files.
 
 import itertools
 import subprocess as sp
-import math
 import os
 import numpy as np
 import deepdish as dd
@@ -99,61 +98,170 @@ def shift_samples(samples, phase, amplitude):
     return samples
 
 
-def beamform(antennas_data, beam_directions, frequency, antenna_spacing, pulse_phase_offset):
+def beamform(antennas_data, beam_directions, frequency, antenna_spacing, pulse_phase_offset=0.0):
     """
-    :param antennas_data: numpy array of dimensions num_antennas x num_samps. All antennas are assumed to be
-    from the same array and are assumed to be side by side with antenna spacing 15.24 m, pulse_shift = 0.0
-    :param beamdirs: list of azimuthal beam directions in degrees off boresite
-    :param rxfreq: frequency to beamform at.
-    :param antenna_spacing: spacing in metres between antennas, used to get the phase shift that
-    corresponds to an azimuthal direction.
-    :param pulse_phase_offset: offset phase to adjust beams by. degrees
-    """
-    beamformed_data = []
+    Given complex antenna data from the linear SuperDARN array, either main or intf, beamfroms the data in the
+    direction given and adjusts for pulse shift.
 
-    antennas = np.arange(antennas_data.shape[0])
+    Parameters
+    ----------
+        antennas_data : complex64 np.array
+            [num_antennas, num_samples] All antennas are assumed to be from the same array and to be side by side with
+            antenna spacing 15.24 m, pulse_shift = 0.0.
+        beam_directions : float np.array
+            Azimuthal beam directions in degrees off boresight.
+        frequency : float
+            Receive frequency to beamform at.
+        antenna_spacing : float
+            Spacing in metres between antennas, used to get the phase shift that corresponds to an azimuthal direction.
+        pulse_shift : float
+            Offset phase in degrees to adjust the beams by.
+
+    Returns
+    -------
+        beamformed_data : complex64 np.array
+            The data beam formed in the direction given.
+    """
+
+    beamformed_data = np.array([])
     num_antennas, num_samps = antennas_data.shape
-    num_pulses = len(pulse_phase_offset)
 
     # Loop through all beam directions
     for beam_direction in beam_directions:
         antenna_phase_shifts = \
-            phase_shift(beam_direction, frequency, antennas, 0.0, num_antennas, antenna_spacing)
+            phase_shift(beam_direction, frequency, np.arange(num_antennas), pulse_phase_offset, num_antennas, antenna_spacing)
+        antenna_phase_shifts = np.repeat(antenna_phase_shifts[:, np.newaxis], num_samps, axis=1)
         # TODO: Figure out decoding phase here
-        # Apply phase shift to data from respective
-        phased_antenna_data = \
-            shift_samples(antennas_data, np.tile(antenna_phase_shifts, (1, antennas_data.shape[1])), 1.0)
-        # phased_antenna_data = [shift_samples(antennas_data[i], antenna_phase_shifts[i], 1.0) for i in
-        #                        range(num_antennas)]
-        phased_antenna_data = np.array(phased_antenna_data)
-
-        # Sum across antennas to get beamformed data
-        one_beam_data = np.sum(phased_antenna_data, axis=0)
-        beamformed_data.append(one_beam_data)
-    beamformed_data = np.array(beamformed_data)
+        phased_antenna_data = shift_samples(antennas_data, antenna_phase_shifts, 1.0)
+        beamformed_data = np.append(beamformed_data, np.sum(phased_antenna_data, axis=0))
 
     return beamformed_data
 
 
-def beamform_samples(samples, beam_phases):
-    """
-    Beamform the samples for multiple beams simultaneously.
+def beamform_record2(filename, out_file):
+    def check_dataset_add(k, v):
+        if k not in recs[group_name].keys():
+            recs[group_name][k] = v
+            if key_num == 0:
+                print(f'\t- added: {k}')
 
-    :param      samples:           The filtered input samples.
-    :type       samples:           ndarray [num_slices, num_antennas, num_samples]
-    :param      beam_phases:       The beam phases used to phase each antenna's samples before
-                                   combining.
-    :type       beam_phases:       list
+    def check_dataset_rename(k, v):
+        if k in recs[group_name].keys():
+            recs[group_name][v] = recs[group_name][k]
+            del recs[group_name][k]
+            if key_num == 0:
+                print(f'\t- updated: {k}')
 
-    """
-    beam_phases = xp.array(beam_phases)
+    def check_dataset_del(k):
+        if k in recs[group_name].keys():
+            del recs[group_name][k]
+            if key_num == 0:
+                print(f'\t- removed: {k}')
 
-    # samples:              [num_slices, num_antennas, num_samples]
-    # beam_phases:          [num_slices, num_beams, num_antennas]
-    # beamformed_samples:   [num_slices, num_beams, num_samples]
-    beamformed_samples = xp.einsum('ijk,ilj->ilk', samples, beam_phases)
+                if 'timestamp_of_write' in recs[group_name].keys():
+                    del recs[group_name]['timestamp_of_write']
+                    if key_num == 0:
+                        print('timestamp_of_write removed')
 
-    return beamformed_samples
+    def check_dataset_revalue(k, v):
+        if k in recs[group_name].keys():
+            recs[group_name][k] = v
+            if key_num == 0:
+                print(f'\t- updated: {k}')
+
+    # Update the file
+    print(f'file: {filename}')
+
+    for key_num, group_name in enumerate(sorted_keys):
+        # Find all the bfiq required missing datasets or create them
+
+        # first_range
+        first_range = 180.0  #scf.FIRST_RANGE
+        check_dataset_add('first_range', np.float32(first_range))
+
+        # first_range_rtt
+        first_range_rtt = first_range * 2.0 * 1.0e3 * 1e6 / speed_of_light
+        check_dataset_add('first_range_rtt', np.float32(first_range_rtt))
+
+        # lags
+        lag_table = list(itertools.combinations(recs[group_name]['pulses'], 2))
+        lag_table.append([recs[group_name]['pulses'][0], recs[group_name]['pulses'][0]])  # lag 0
+        lag_table = sorted(lag_table, key=lambda x: x[1] - x[0])  # sort by lag number
+        lag_table.append([recs[group_name]['pulses'][-1], recs[group_name]['pulses'][-1]])  # alternate lag 0
+        lags = np.array(lag_table, dtype=np.uint32)
+        check_dataset_add('lags', lags)
+
+        # num_ranges
+        if station_name in ["cly", "rkn", "inv"]:
+            num_ranges = 100  # scf.POLARDARN_NUM_RANGES
+            check_dataset_add('num_ranges', np.uint32(num_ranges))
+        elif station_name in ["sas", "pgr"]:
+            num_ranges = 75  # scf.STD_NUM_RANGES
+            check_dataset_add('num_ranges', np.uint32(num_ranges))
+
+        # range_sep
+        range_sep = 1 / recs[group_name]['rx_sample_rate'] * speed_of_light / 1.0e3 / 2.0
+        check_dataset_add('range_sep', np.float32(range_sep))
+
+        # Check pulse_phase_offset type
+        recs[group_name]['pulse_phase_offset'] = np.float32(recs[group_name]['pulse_phase_offset'][()])
+
+        # Beamform the data
+        main_antenna_spacing = 15.24  # For SAS from config file
+        intf_antenna_spacing = 15.24  # For SAS from config file
+        beam_azms = recs[group_name]['beam_azms'][()]
+        freq = recs[group_name]['freq']
+
+        # antennas data shape  = [num_antennas, num_sequences, num_samps]
+        antennas_data = recs[group_name]['data']
+        antennas_data = antennas_data.reshape(recs[group_name]['data_dimensions'])
+        main_beamformed_data = np.array([], dtype=np.complex64)
+        intf_beamformed_data = np.array([], dtype=np.complex64)
+
+        # Loop through every sequence and beamform the data
+        # output shape after loop is [num_sequences, num_beams, num_samps]
+        for j in range(antennas_data.shape[1]):
+            # data input shape = [num_antennas, num_samps]
+            # data return shape = [num_beams, num_samps]
+            main_beamformed_data = np.append(main_beamformed_data,
+                                             beamform(antennas_data[0:16, j, :], beam_azms, freq, main_antenna_spacing))
+            intf_beamformed_data = np.append(intf_beamformed_data,
+                                             beamform(antennas_data[16:20, j, :], beam_azms, freq, intf_antenna_spacing))
+
+        # Remove iq data for bfiq data.
+        # Data shape after append is [num_antenna_arrays, num_sequences, num_beams, num_samps]
+        # Then flatten the array for final .site format
+        del recs[group_name]['data']
+        recs[group_name]['data'] = np.append(main_beamformed_data, intf_beamformed_data).flatten()
+
+        # data_dimensions
+        # We need set num_antennas_arrays=2 for two arrays and num_beams=length of beam_azms
+        data_dimensions = recs[group_name]['data_dimensions']
+        recs[group_name]['data_dimensions'] = np.array([2, data_dimensions[1], len(beam_azms), data_dimensions[2]], dtype=np.uint32)
+
+        # NOTE (Adam): After all this we essentially could loop through all records and build the array file live but,
+        # it is just as easy to save the .site format and use pydarnio to reload the data, verify its contents
+        # automatically and then reshape it into .array format (which automatically handles all the zero padding).
+
+        write_dict = {}
+        write_dict[group_name] = convert_to_numpy(recs[group_name])
+        dd.io.save(tmp_file, write_dict, compression=None)
+
+        # use external h5copy utility to move new record into 2hr file.
+        cmd = 'h5copy -i {newfile} -o {twohr} -s {dtstr} -d {dtstr}'
+        cmd = cmd.format(newfile=tmp_file, twohr=out_file + '.tmp', dtstr=group_name)
+
+        sp.call(cmd.split())
+        os.remove(tmp_file)
+
+    bfiq_reader = pydarnio.BorealisRead(out_file + '.tmp', 'bfiq', 'site')
+    array_data = bfiq_reader.arrays
+    bfiq_writer = pydarnio.BorealisWrite(out_file, array_data, 'bfiq', 'array')
+
+    os.remove(out_file + '.tmp')
+    print('out_file:', out_file)
+
+    return
 
 
 def beamform_record(record):
