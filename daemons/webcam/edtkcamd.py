@@ -12,7 +12,7 @@ config = {'site': 'lab',    # Location of webcam descriptor
           'rotate': None,   # Accepts int 90, 180, 270
           'scale': None,    # Percent to scale 100 = 100%
           'mirror': None,   # Axis to flip, 0 = vertical, 1 = horizontal
-          'cadence': 60,     # Cadence to take pictures at in seconds
+          'cadence': 5,     # Cadence to take pictures at in seconds
           }
 
 
@@ -37,7 +37,7 @@ class Webcam:
             rot = [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE]
             idx = [90, 180, 270].index(self.rotate)
             self.frame = cv2.rotate(self.frame, rot[idx])
-        if self.mirror is not None:
+        if self.mirror is [0, 1]:
             self.frame = cv2.flip(self.frame, self.mirror)
         if self.scale is not None:
             width = int(self.frame.shape[1] * self.scale / 100)
@@ -50,7 +50,8 @@ class Webcam:
 
     def take_photo(self):
         self.capture()
-        self.save()
+        cv2.imshow(self.filename, self.frame)
+        # self.save()
 
     def video(self):
         while True:
@@ -61,8 +62,14 @@ class Webcam:
 
 if __name__ == '__main__':
     cam = Webcam(config)
-    schedule.every(cam.cadence).seconds.do(cam.take_photo)
-    time.sleep(60.0 - time.localtime().tm_sec)
+    # schedule.every(cam.cadence).seconds.do(cam.take_photo)
+    # time.sleep(60.0 - time.localtime().tm_sec)
+    # while True:
+    #     schedule.run_pending()
+    #     time.sleep(1)
+
+    # time.sleep(60.0 - time.localtime().tm_sec)
     while True:
-        schedule.run_pending()
-        time.sleep(1)
+        cam.take_photo()
+        cv2.waitKey(1)
+        time.sleep(cam.cadence)
