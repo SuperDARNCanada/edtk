@@ -3,7 +3,6 @@ import cv2
 import numpy as np
 import datetime
 import time
-import schedule
 
 
 config = {'site': 'lab',    # Location of webcam descriptor
@@ -12,7 +11,7 @@ config = {'site': 'lab',    # Location of webcam descriptor
           'rotate': None,   # Accepts int 90, 180, 270
           'scale': None,    # Percent to scale 100 = 100%
           'mirror': None,   # Axis to flip, 0 = vertical, 1 = horizontal
-          'cadence': 5,     # Cadence to take pictures at in seconds
+          'cadence': 60,     # Cadence to take pictures at in seconds
           }
 
 
@@ -50,8 +49,8 @@ class Webcam:
 
     def take_photo(self):
         self.capture()
-        cv2.imshow(self.filename, self.frame)
-        # self.save()
+        # cv2.imshow(self.filename, self.frame)
+        self.save()
 
     def video(self):
         while True:
@@ -68,7 +67,7 @@ if __name__ == '__main__':
     #     schedule.run_pending()
     #     time.sleep(1)
 
-    # time.sleep(60.0 - time.localtime().tm_sec)
+    time.sleep(60.0 - time.localtime().tm_sec)
     while True:
         cam.take_photo()
         cv2.waitKey(1)
