@@ -11,7 +11,10 @@ config = {'site': 'lab',    # Location of webcam descriptor
           'rotate': None,   # Accepts int 90, 180, 270
           'scale': None,    # Percent to scale 100 = 100%
           'mirror': None,   # Axis to flip, 0 = vertical, 1 = horizontal
-          'cadence': 60,     # Cadence to take pictures at in seconds
+          'brightness': None,  # Brightness of the image
+          'contrast': None,    # Contrast of the image
+          'saturation': None,   # Saturation of the image
+          'cadence': 1,  # Cadence to take pictures at in seconds
           }
 
 
@@ -24,6 +27,9 @@ class Webcam:
         self.rotate = config['rotate']
         self.scale = config['scale']
         self.mirror = config['mirror']
+        self.brightness = config['brightness']
+        self.contrast = config['contrast']
+        self.saturation = config['saturation']
 
     def __del__(self):
         self.cam.release()
@@ -42,6 +48,12 @@ class Webcam:
             width = int(self.frame.shape[1] * self.scale / 100)
             height = int(self.frame.shape[0] * self.scale / 100)
             self.frame = cv2.resize(self.frame, (width, height))
+        if self.brightness is not None:
+            self.cam.set(cv2.CAP_PROP_BRIGHTNESS, self.brightness)
+        if self.contrast is not None:
+            self.cam.set(cv2.CAP_PROP_CONTRAST, self.contrast)
+        if self.saturation is not None:
+            self.cam.set(cv2.CAP_PROP_SATURATION, self.saturation)
 
     def save(self):
         t = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
