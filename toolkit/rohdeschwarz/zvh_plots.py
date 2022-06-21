@@ -253,6 +253,69 @@ def plot_vswr(data, directory=''):
     return
 
 
+def plot_sky_noise(data, directory=''):
+    """
+    Create a plot of frequency vs. magnitude antenna test.
+
+    Parameters
+    ----------
+        data : dataclass
+            A dataclass containing Rohde & Schwarz ZVH measured data; must contain magnitude and frequency.
+        directory : str
+            The output file directory to save the plot in.
+
+    Returns
+    -------
+        None
+    """
+
+    # Pretty plot configuration.
+    from matplotlib import rc
+    rc('font', **{'family': 'serif', 'serif': ['DejaVu Serif']})
+    SMALL_SIZE = 10
+    MEDIUM_SIZE = 12
+    BIGGER_SIZE = 14
+    plt.rc('font', size=MEDIUM_SIZE)  # controls default text sizes
+    plt.rc('axes', titlesize=BIGGER_SIZE)  # fontsize of the axes title
+    plt.rc('axes', labelsize=MEDIUM_SIZE)  # fontsize of the x and y labelsa
+    plt.rc('xtick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
+    plt.rc('ytick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
+    plt.rc('legend', fontsize=SMALL_SIZE)  # legend fontsize
+    plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
+    outfile = f'{directory}sky_noise_{data.site}_{data.date}.png'
+    mean_magnitude = 0.0
+    total_antennas = 0.0
+    xmin = 20.0e6
+    xmax = 0.0
+
+    fig, ax = plt.subplots(1, 1, figsize=[13, 8])
+    fig.suptitle(f'Rohde & Schwarz Data: Sky Noise\n{data.site} {data.date}')
+    for index, name in enumerate(data.names):
+        mean_magnitude += data.datas[index].magnitude
+        total_antennas += 1.0
+        if np.min(data.datas[index].freq) < xmin:
+            xmin = np.min(data.datas[index].freq)
+        if np.max(data.datas[index].freq) > xmax:
+            xmax = np.max(data.datas[index].freq)
+        ax.plot(data.datas[index].freq, data.datas[index].magnitude, label=data.datas[index].name)
+
+    mean_magnitude /= total_antennas
+    ax.plot(data.datas[0].freq, mean_magnitude, '--k', label='mean magnitude')
+
+    plt.legend(loc='center', fancybox=True, ncol=7, bbox_to_anchor=[0.5, -0.4])
+    ax.grid()
+    ax.set_xlim([xmin, xmax])
+    ax.ticklabel_format(axis="x", style="sci", scilimits=(6, 6))
+    ax.set_xlabel('Frequency [MHz]')
+    ax.set_ylabel('Magnitude [dBm]')
+    plt.tight_layout()
+    plt.savefig(outfile)
+
+    print(f'sky noise file created at: {outfile}')
+    return
+
+
 def main():
     parser = argparse.ArgumentParser(description='SuperDARN Canada© -- Engineering Diagnostic Tools Kit: '
                                                  '(Rohde & Schwarz Data Plotting) '
@@ -264,7 +327,7 @@ def main():
     parser.add_argument('-o', '--outdir', type=str, default='', help='directory to save output plots.')
     parser.add_argument('-p', '--pattern', type=str, help='the file naming pattern less the appending numbers.')
     parser.add_argument('-v', '--verbose', action='store_true', help='explain what is being done verbosely.')
-    parser.add_argument('-m', '--mode', type=str, help='select the plot mode, eg: vswr or path.')
+    parser.add_argument('-m', '--mode', type=str, help='select the plot mode, options(vswr, path, sky).')
     args = parser.parse_args()
     directory = args.directory
     outdir = args.outdir
@@ -283,8 +346,10 @@ def main():
         plot_vswr(data, directory=outdir)
     elif args.mode == 'path':
         plot_rx_path(data, directory=outdir)
+    elif args.mode == "sky":
+        plot_sky_noise(data, directory=outdir)
     else:
-        print('Select a mode: vswr or path')
+        print('Select a mode: vswr, path, or sky')
 
     return None
 
