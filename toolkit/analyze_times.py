@@ -231,12 +231,19 @@ def full_data_plot(timestamp, filelist, filetype_to_dtype_dict):
     data = {}
     metadata = {}
     min_sqns = None
+    min_aveperiods = None
+    aveperiod_fields = ['num_sqns', 'write_time']
+
     for f in filelist:
         ftype = f.split('-')[-1]
         for dtype in filetype_to_dtype_dict[ftype]:
             data[dtype], metadata[dtype] = extract_data(f, dtype, 'v0.5')    # TODO: make the version configurable
-            if min_sqns is None or data[dtype].size < min_sqns and dtype not in ['num_sqns', 'write_time']:
-                min_sqns = data[dtype].size
+            if dtype in aveperiod_fields:
+                if min_aveperiods is None or data[dtype].size < min_aveperiods:
+                    min_aveperiods = data[dtype].size
+            else:
+                if min_sqns is None or data[dtype].size < min_sqns:
+                    min_sqns = data[dtype].size
 
     if 'num_sqns' in data.keys():
         cumulative_sqns = np.cumsum(data['num_sqns'])
@@ -246,8 +253,9 @@ def full_data_plot(timestamp, filelist, filetype_to_dtype_dict):
     fig.suptitle('Logfile Parameters for {}'.format(timestamp))
 
     for i, dtype in enumerate(data.keys()):
-        if dtype in ['num_sqns', 'write_time']:
-            axes[i].plot(cumulative_sqns, data[dtype], label=metadata[dtype]['phrase'])
+        if dtype in aveperiod_fields:
+            axes[i].plot(cumulative_sqns[:min_aveperiods], data[dtype][:min_aveperiods],
+                         label=metadata[dtype]['phrase'])
         else:
             axes[i].plot(np.arange(min_sqns), data[dtype][:min_sqns], label=metadata[dtype]['phrase'])
         axes[i].set_ylabel("{} ({})".format(metadata[dtype]['phrase'], metadata[dtype]['units']))
