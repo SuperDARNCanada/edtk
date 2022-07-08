@@ -1,6 +1,9 @@
+import collections
 import glob
 import argparse
-from analyze_times import extract_data
+import os
+
+from analyze_times import plot_single_param, full_data_plot
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -29,8 +32,10 @@ if __name__ == '__main__':
         'signal_processing': ['memcpy_time', 'dec_time', 'bf_time', 'corr_time', 'send_time'],
         'rx_signal_processing': ['memcpy_time', 'processing_time', 'send_time']
     }
-    print("Globbing {}/{}*".format(args.input_directory, args.timestamp))
-    print(glob.glob('{}/{}*'.format(args.input_directory, args.timestamp)))
+
+    # Dictionary of {timestamp: filelist} pairs for all matching files. Essentially just grouping concurrent logs.
+    grouped_files = collections.defaultdict(list)
+
     for file in glob.glob("{}/{}*".format(args.input_directory, args.timestamp)):
         print(file)
         filetype = file.split('-')[-1]
@@ -38,5 +43,13 @@ if __name__ == '__main__':
         if filetype not in filetypes_to_datatypes.keys():
             continue
 
-        for data_type in filetypes_to_datatypes[filetype]:
-            extract_data(file, data_type, args.version, plot_dir)
+        # for data_type in filetypes_to_datatypes[filetype]:
+        #     plot_single_param(file, data_type, args.version, plot_dir)
+
+        name = os.path.basename(file)
+        tstamp = name[:16]
+        grouped_files[tstamp].append(file)
+
+    for tstamp, filelist in grouped_files.items():
+        full_data_plot(tstamp, filelist, filetypes_to_datatypes)
+
