@@ -37,7 +37,6 @@ if __name__ == '__main__':
     grouped_files = collections.defaultdict(list)
 
     for file in glob.glob("{}/{}*".format(args.input_directory, args.timestamp)):
-        print(file)
         filetype = file.split('-')[-1]
 
         if filetype not in filetypes_to_datatypes.keys():
@@ -51,5 +50,6 @@ if __name__ == '__main__':
         grouped_files[tstamp].append(file)
 
     for tstamp, filelist in grouped_files.items():
+        print("Plotting {}".format(tstamp))
         full_data_plot(tstamp, filelist, filetypes_to_datatypes)
 
