@@ -1,0 +1,1 @@
+# Collects data and parses into a JSON to send database for dashboard

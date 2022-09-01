@@ -38,6 +38,7 @@ setup(
     install_requires=['numpy', 'h5py', 'matplotlib', 'PyYaml', 'Pandas'],
     entry_points={
         'console_scripts': [
+            'edtk=help.py:main'
             'edtk-zvh=toolkit.rhodeschwarz.zvh_plots:main',
         ],
     },
