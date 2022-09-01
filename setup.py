@@ -40,6 +40,7 @@ setup(
         'console_scripts': [
             'edtk=help.py:main'
             'edtk-zvh=toolkit.rhodeschwarz.zvh_plots:main',
+            'edtk-convert=toolkit.convert.convert:main'
         ],
     },
 )
