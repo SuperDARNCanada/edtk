@@ -26,8 +26,7 @@ ADDRESSES=(3062313083@sms.sasktel.com)
 SERVER_DOWN="false"
 MESSAGE_SENT="/tmp/.message_sent_flag"
 
-MESSAGE="SuperDARN Borealis Alert:\n\n${RADARID}borealis is down"
-echo -e $MESSAGE
+MESSAGE="SuperDARN Borealis Alert:\n\n${RADARID}borealis is down\n\nSent from $(hostname)"
 
 ###################################################################################################
 
@@ -36,7 +35,7 @@ date --utc "+%Y%m%d %H:%M:%S UTC"
 
 # If ping fails, Borealis is unreachable and return value will be 1
 ping -c1 -W1 $BOREALIS_IP
-if [[ $? -ne 0 ]]; then
+if [[ $? -eq 0 ]]; then
     rm -f $MESSAGE_SENT
 else
     echo 'Borealis is down'
