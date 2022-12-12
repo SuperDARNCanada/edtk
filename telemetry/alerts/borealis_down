@@ -39,7 +39,7 @@ ADDRESSES=(3062313083@sms.sasktel.com)
 MESSAGE_SENT="false"    # Flag to signal a text message has been sent
 PING_FAIL_COUNT=0       # Number of times ping has failed to reach borealis computer
 THRESHOLD=10            # Number of times ping must fail before message is sent
-SLEEP_TIME=5           # How long program waits between pings
+SLEEP_TIME=9            # How long program waits between pings
 
 MESSAGE="SuperDARN Borealis Alert:\n\n${RADARID}borealis is down\n\nSent from $(hostname)"
 
@@ -51,7 +51,7 @@ printf "\n\n"
 
 while true; do
     # If ping fails, Borealis is unreachable and return value will be 1
-    ping -c1 -W1 192.155.242.156 # $BOREALIS_IP
+    ping -c1 -W1 $BOREALIS_IP
     if [[ $? -eq 0 ]]; then
         MESSAGE_SENT="false"
         PING_FAIL_COUNT=0
