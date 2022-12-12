@@ -43,7 +43,11 @@ SLEEP_TIME=9            # How long program waits between pings
 
 MESSAGE="SuperDARN Borealis Alert:\n\n${RADARID}borealis is down\n\nSent from $(hostname)"
 
+LOGFILE="${HOME}/logs/borealis_down.log"
+
 ###################################################################################################
+
+exec &>> $LOGFILE
 
 printf "\nDaemon $0 starting on $(hostname) for ${RADARID}\n"
 date --utc "+%Y%m%d %H:%M:%S UTC"
