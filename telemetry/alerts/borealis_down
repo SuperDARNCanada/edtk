@@ -14,6 +14,19 @@
 #   - Email-to-text addresses defined correctly
 #   - Line 'myorigin = smtp.servername.suffix' must be added to /etc/postfix/main.cf to stop cell
 #     providers from blocking the computer sending via mutt
+#
+# This script should be ran as a systemd daemon. An example .service file is shown below:
+# [Unit]
+# Description=Borealis down alert daemon
+# 
+# [Service]
+# User=transfer
+# ExecStart=/home/transfer/edtk/telemetry/alerts/borealis_down
+# Restart=always
+# 
+# [Install]
+# WantedBy=multi-user.target
+
 
 ###################################################################################################
 
@@ -23,33 +36,41 @@ source "${HOME}/.bashrc"
 # Correct cell provider email-to-sms addresses must be used too
 ADDRESSES=(3062313083@sms.sasktel.com)
 
-SERVER_DOWN="false"
-MESSAGE_SENT="/tmp/.message_sent_flag"
+MESSAGE_SENT="false"    # Flag to signal a text message has been sent
+PING_FAIL_COUNT=0       # Number of times ping has failed to reach borealis computer
+THRESHOLD=10            # Number of times ping must fail before message is sent
+SLEEP_TIME=5           # How long program waits between pings
 
 MESSAGE="SuperDARN Borealis Alert:\n\n${RADARID}borealis is down\n\nSent from $(hostname)"
 
 ###################################################################################################
 
-printf "Executing $0 on $(hostname) for ${RADARID}\n"
+printf "\nDaemon $0 starting on $(hostname) for ${RADARID}\n"
 date --utc "+%Y%m%d %H:%M:%S UTC"
+printf "\n\n"
 
-# If ping fails, Borealis is unreachable and return value will be 1
-ping -c1 -W1 $BOREALIS_IP
-if [[ $? -eq 0 ]]; then
-    rm -f $MESSAGE_SENT
-else
-    echo 'Borealis is down'
-    SERVER_DOWN="true"
-fi
+while true; do
+    # If ping fails, Borealis is unreachable and return value will be 1
+    ping -c1 -W1 192.155.242.156 # $BOREALIS_IP
+    if [[ $? -eq 0 ]]; then
+        MESSAGE_SENT="false"
+        PING_FAIL_COUNT=0
+    else
+        PING_FAIL_COUNT=$((PING_FAIL_COUNT + 1))
+        echo "$(date --utc "+%Y%m%d %H:%M:%S") Borealis is down, ping number $PING_FAIL_COUNT"
+    fi
 
-# Send text alert if Borealis unreachable, and an alert hasn't already been sent
-if [[ $SERVER_DOWN == "true" ]] && [[ ! -e $MESSAGE_SENT ]]; then
-    echo "Sending text alerts to:"
-    printf '%s\n' "${ADDRESSES[@]}"
-    for address in $ADDRESSES; do
-        echo -e $MESSAGE | mutt -- $address
-    done
-    touch $MESSAGE_SENT
-fi
-echo ""
-
+    # Send text alert if Borealis unreachable, and an alert hasn't already been sent
+    if [[ $PING_FAIL_COUNT -ge $THRESHOLD ]] && [[ $MESSAGE_SENT == "false" ]]; then
+        date --utc "+%Y%m%d %H:%M:%S UTC"
+        echo "Sending text alerts to:"
+        printf '%s\n' "${ADDRESSES[@]}"
+        for address in $ADDRESSES; do
+            echo -e $MESSAGE | mutt -- $address
+        done
+        MESSAGE_SENT="true"
+        PING_FAIL_COUNT=0
+    fi
+    sleep $SLEEP_TIME
+    printf "\n"
+done
