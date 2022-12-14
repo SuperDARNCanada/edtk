@@ -14,7 +14,7 @@
 #   - Email-to-text addresses defined correctly
 #   - Line 'myorigin = smtp.servername.suffix' must be added to /etc/postfix/main.cf to stop cell
 #     providers from blocking the computer sending via mutt
-#   - A valid Slack webhook must be defined in config.sh
+#   - SLACK_WEBHOOK defined in ~/.bashrc to a valid Slack webhook URL
 #
 # This script should be ran as a systemd daemon. An example .service file is shown below:
 # [Unit]
@@ -34,10 +34,7 @@
 source "${HOME}/.bashrc"
 source "${HOME}/edtk/telemetry/alerts/config.sh"    # Load in alert config file
 
-# Get the Slack webhook address to send alerts to
-# This address specified what channel on Slack the alert will be sent to
-HOOK_VARIABLE="${RADARID}_hook" # Ex) sas_hook
-WEBHOOK="${!HOOK_VARIABLE}"     # Ex) https://hooks... 
+# Get SLACK_WEBHOOK from .bashrc
 
 MESSAGE_SENT="false"    # Flag to signal a text message has been sent
 PING_FAIL_COUNT=0       # Number of times ping has failed to reach borealis computer
@@ -70,9 +67,9 @@ while true; do
     # Send text alert if Borealis unreachable, and an alert hasn't already been sent
     if [[ $PING_FAIL_COUNT -ge $THRESHOLD ]] && [[ $MESSAGE_SENT == "false" ]]; then
         date --utc "+%Y%m%d %H:%M:%S UTC"
-        echo "Sending text alerts to: ${WEBHOOK}"
+        echo "Sending text alerts to: ${SLACK_WEBHOOK}"
 
-        curl --header "Content-type: application/json" --data "{'text':'${MESSAGE}'}" $WEBHOOK
+        curl --header "Content-type: application/json" --data "{'text':'${MESSAGE}'}" $SLACK_WEBHOOK
 
         MESSAGE_SENT="true"
     fi
