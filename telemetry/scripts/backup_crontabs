@@ -12,9 +12,11 @@ date --utc
 mkdir -p $BACKUP_DIR
 
 for user_crontab in /var/spool/cron/tabs/*; do
-    [[ -e $user_crontab ]] || echo "No crontabs found" && continue  # exit if no crontabs found
-    echo "Backing up crontab for $(basename)..."
-    cp --verbose $user_crontab "${BACKUP_DIR}/$(basename $user_crontab)-$(date --utc +"%Y%m%d")"
+    [[ -e $user_crontab ]] || continue  # exit if no crontabs found
+    echo "Backing up crontab for $(basename $user_crontab)..."
+    backup_file="${BACKUP_DIR}/$(basename $user_crontab)-$(date --utc +"%Y%m%d")"
+    cp --verbose $user_crontab $backup_file
+    chmod 664 $backup_file  # Give read permissions to all users  
 done
 
 echo ""
