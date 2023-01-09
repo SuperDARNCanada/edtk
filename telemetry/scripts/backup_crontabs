@@ -1,0 +1,23 @@
+#!/bin/bash
+# This script backs up all crontabs on a computer to a specified directory
+# Crontabs are read from /var/spool/cron/tabs/
+# Must be run as root user
+# Suggested usage: Run periodically on root user's crontab
+
+readonly BACKUP_DIR="/data/crontab_backup"
+
+date --utc
+
+# Make backup dir, root will be owner
+mkdir -p $BACKUP_DIR
+
+for user_crontab in /var/spool/cron/tabs/*; do
+    [[ -e $user_crontab ]] || continue  # exit if no crontabs found
+    echo "Backing up crontab for $(basename $user_crontab)..."
+    backup_file="${BACKUP_DIR}/$(basename $user_crontab)-$(date --utc +"%Y%m%d")"
+    cp --verbose $user_crontab $backup_file
+    chmod 664 $backup_file          # Give read permissions to all users  
+    chown 1000:users $backup_file   # Make regular user owner and change group
+done
+
+echo ""
