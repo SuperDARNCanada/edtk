@@ -16,7 +16,8 @@ for user_crontab in /var/spool/cron/tabs/*; do
     echo "Backing up crontab for $(basename $user_crontab)..."
     backup_file="${BACKUP_DIR}/$(basename $user_crontab)-$(date --utc +"%Y%m%d")"
     cp --verbose $user_crontab $backup_file
-    chmod 664 $backup_file  # Give read permissions to all users  
+    chmod 664 $backup_file          # Give read permissions to all users  
+    chown 1000:users $backup_file   # Make regular user owner and change group
 done
 
 echo ""
