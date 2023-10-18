@@ -1,15 +1,16 @@
 """
-SuperDARN Canada© -- Engineering Diagnostic Tools Kit: (Rohde & Schwarz Data Plotting)
+SuperDARN Canada© -- Engineering Diagnostic Tools Kit: (Vector Network Analyzer Data Plotting)
 
 Author: Adam Lozinsky
 Date: October 6, 2021
 Affiliation: University of Saskatchewan
 
 Typically SuperDARN engineers will make a series of measurements for each antennas RF path using a
-Rohde & Schwarz ZVH or similar spectrum analyzer. These measurements can be converted into .csv files.
-The files contain different data based on the instrument settings, but it is per antenna. It is preferred
-to plot all the data for each antenna on one plot so differences and outliers are easily visible. This tool
-will produce those common plots from the .csv files.
+Rohde & Schwarz ZVH or similar vector network analyzer (I.E. Copper Mountain TR VNA). These
+measurements can be converted into .csv files. The files contain different data based on the
+instrument settings, but it is per antenna. It is preferred to plot all the data for each antenna on
+one plot so differences and outliers are easily visible. This tool will produce those common plots
+from the .csv files.
 
 Use 'python zvh_tools.py --help' to discover options if running directly from command line.
 """
@@ -25,7 +26,7 @@ import numpy as np
 
 @dataclass(frozen=True, order=True)
 class RSData:
-    """Data class for keeping the Rohde & Schwarz ZVH data."""
+    """Data class for keeping the VNA data."""
     name: str
     freq: float
     vswr: float
@@ -35,17 +36,20 @@ class RSData:
 
 @dataclass(order=True)
 class RSAllData:
-    """Data class holding all loaded Rohde & Schwarz ZVH data for a requested job."""
+    """Data class holding all loaded VNA data for a requested job."""
     site: str = field(default_factory=str)
     date: str = field(default_factory=str)
     names: list = field(default_factory=list)
     datas: list = field(default_factory=list)
 
 
-def read_data(directory, pattern, verbose=False, site=''):
+def read_data(directory, pattern, verbose=False, site='', vna='zvh'):
     """
-    Load the Rohde & Schwarz data from .csv files from either a parent directory given a file pattern or from a
+    Load the VNA data from .csv files from either a parent directory given a file pattern or from a
     directory directly. The data is then loaded into a dataclass and returned for further processing.
+    
+    For Rohde & Schwarz ZVH, data must be read in from the specific R&S format.
+    For Copper Mountain VNA, data can be read in directly from utf-8 CSV files
 
     Parameters
     ----------
@@ -57,6 +61,9 @@ def read_data(directory, pattern, verbose=False, site=''):
             True will print more information about whats going on, False squelches.
         site : str
             Name of the site the data was taken from; used in naming plots and plot titles.
+        vna : str
+            Vector network analyzer that produced the data to be plotted. Options are 'zvh' for 
+            the Rohde & Schwarz ZVH, or 'trvna' for the Copper Mountain TR VNA
 
     Returns
     -------
@@ -66,7 +73,7 @@ def read_data(directory, pattern, verbose=False, site=''):
 
     files = glob.glob(directory + '/*/' + pattern + '*.csv')
     if files == []:
-        files = glob.glob(directory + pattern + '*.csv')
+        files = sorted(glob.glob(directory + pattern + '*.csv'))
     verbose and print("files found:\n", files)
 
     all_data = RSAllData()
@@ -74,19 +81,27 @@ def read_data(directory, pattern, verbose=False, site=''):
     for file in files:
         name = os.path.basename(file).replace('.csv', '')
         verbose and print(f'loading file: {file}')
-        df = pd.read_csv(file, encoding='cp1252')
-        skiprows = 0
-        for index, row in df.iterrows():
-            skiprows += 1
-            if 'date' in str(row).lower():
-                date = row[1].replace(' ', '').split('/')
-                date = '-'.join(date[::-1])
-                all_data.date = date
-            if '[hz]' in str(row).lower():
-                break
+        if vna == 'zvh':
+            df = pd.read_csv(file, encoding='cp1252')
+            skiprows = 0
+            for index, row in df.iterrows():
+                skiprows += 1
+                if 'date' in str(row).lower():
+                    date = row.iloc[1].replace(' ', '').split('/')
+                    date = '-'.join(date[::-1])
+                    all_data.date = date
+                if '[hz]' in str(row).lower():
+                    break
 
-        # The ZVH .csv files are in format cp1252 not utf-8 so using utf-8 will break on degrees symbol.
-        df = pd.read_csv(file, skiprows=skiprows, encoding='cp1252')
+            # The ZVH .csv files are in format cp1252 not utf-8 so using utf-8 will break on degrees symbol.
+            df = pd.read_csv(file, skiprows=skiprows, encoding='cp1252')
+        elif vna == 'trvna':
+            df = pd.read_csv(file)
+            all_data.date = '2023-09-26'
+        else:
+            print(f'Unknown VNA {vna}: Exiting...')
+            exit(1)
+        
         keys = list(df.keys())
         freq = None
         vswr = None
@@ -102,6 +117,7 @@ def read_data(directory, pattern, verbose=False, site=''):
             if 'vswr' in key.lower():
                 vswr = df[key]
                 verbose and print(f'\t-VSWR data found in: {name}')
+                print(f"VSWR: {vswr}, type: {vswr.type}")
             if 'mag' in key.lower():
                 magnitude = df[key]
                 verbose and print(f'\t-MAGNITUDE data found in: {name}')
@@ -146,40 +162,48 @@ def plot_rx_path(data, directory=''):
     plt.rc('legend', fontsize=SMALL_SIZE)  # legend fontsize
     plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
+    LINE_STYLES = ['solid', 'dashed', 'dashdot', 'dotted']
+    NUM_COLOURS = 10
+
     outfile = f'{directory}rx_path_{data.site}_{data.date}.png'
     mean_magnitude = 0.0
     mean_phase = 0.0
     total_antennas = 0.0
-    xmin = 20.0e6
-    xmax = 0.0
+    # xmin = 20.0e6
+    # xmax = 0.0
+    xmin = 8.0e6
+    xmax = 20.0e6
 
     fig, ax = plt.subplots(2, 1, figsize=[13, 8])
-    fig.suptitle(f'Rohde & Schwarz Data: RX Path per Antenna\n{data.site} {data.date}')
+    # fig.suptitle(f'TRVNA Data: RX Path per Antenna\n{data.site} {data.date}')
+    fig.suptitle(f'TRVNA Data: RX Path per Antenna\nInuvik {data.date}')
     for index, name in enumerate(data.names):
         mean_magnitude += data.datas[index].magnitude
-        mean_phase += data.datas[index].phase
+        # mean_phase += data.datas[index].phase
         total_antennas += 1.0
         if np.min(data.datas[index].freq) < xmin:
             xmin = np.min(data.datas[index].freq)
         if np.max(data.datas[index].freq) > xmax:
             xmax = np.max(data.datas[index].freq)
-        ax[0].plot(data.datas[index].freq, data.datas[index].magnitude, label=data.datas[index].name)
-        ax[1].plot(data.datas[index].freq, data.datas[index].phase, label=data.datas[index].name)
+        ax[0].plot(data.datas[index].freq, data.datas[index].magnitude, label=data.datas[index].name,
+                    linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
+        # ax[1].plot(data.datas[index].freq, data.datas[index].phase, label=data.datas[index].name)
 
     mean_magnitude /= total_antennas
     mean_phase /= total_antennas
     ax[0].plot(data.datas[0].freq, mean_magnitude, '--k', label='mean magnitude')
-    ax[1].plot(data.datas[0].freq, mean_phase, '--k', label='mean phase')
+    # ax[1].plot(data.datas[0].freq, mean_phase, '--k', label='mean phase')
 
-    plt.legend(loc='center', fancybox=True, ncol=7, bbox_to_anchor=[0.5, -0.4])
+    ax[0].legend(loc='center', fancybox=True, ncol=7, bbox_to_anchor=[0.5, -0.4])
     ax[0].grid()
     ax[1].grid()
     ax[0].set_xlim([xmin, xmax])
+    # ax[0].set_ylim([25,30])
     ax[1].set_xlim([xmin, xmax])
     ax[0].ticklabel_format(axis="x", style="sci", scilimits=(6, 6))
     ax[1].ticklabel_format(axis="x", style="sci", scilimits=(6, 6))
     ax[1].set_xlabel('Frequency [MHz]')
-    ax[0].set_ylabel('Magnitude [dBm]')
+    ax[0].set_ylabel('Magnitude [dB]')
     ax[1].set_ylabel('Phase [°]')
     plt.tight_layout()
     plt.savefig(outfile)
@@ -217,6 +241,9 @@ def plot_vswr(data, directory=''):
     plt.rc('ytick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
     plt.rc('legend', fontsize=SMALL_SIZE)  # legend fontsize
     plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+    
+    LINE_STYLES = ['solid', 'dashed', 'dashdot', 'dotted']
+    NUM_COLOURS = 10
 
     outfile = f'{directory}vswr_{data.site}_{data.date}.png'
     mean_vswr = 0.0
@@ -225,7 +252,8 @@ def plot_vswr(data, directory=''):
     xmax = 0.0
 
     plt.figure(figsize=[13, 8])
-    plt.suptitle(f'Rohde & Schwarz Data: VSWR per Antenna\n{data.site} {data.date}')
+    # plt.suptitle(f'TRVNA Data: VSWR per Antenna\n{data.site} {data.date}')
+    plt.suptitle(f'TRVNA Data: VSWR per Antenna\nSaskatoon {data.date}')
     for index, name in enumerate(data.names):
         mean_vswr += data.datas[index].vswr
         total_antennas += 1.0
@@ -233,7 +261,8 @@ def plot_vswr(data, directory=''):
             xmin = np.min(data.datas[index].freq)
         if np.max(data.datas[index].freq) > xmax:
             xmax = np.max(data.datas[index].freq)
-        plt.plot(data.datas[index].freq, data.datas[index].vswr, label=data.datas[index].name)
+        plt.plot(data.datas[index].freq, data.datas[index].vswr, label=data.datas[index].name,
+                         linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
 
     mean_vswr /= total_antennas
     plt.plot(data.datas[0].freq, mean_vswr, '--k', label='mean')
@@ -328,6 +357,7 @@ def main():
     parser.add_argument('-p', '--pattern', type=str, help='the file naming pattern less the appending numbers.')
     parser.add_argument('-v', '--verbose', action='store_true', help='explain what is being done verbosely.')
     parser.add_argument('-m', '--mode', type=str, help='select the plot mode, options(vswr, path, sky).')
+    parser.add_argument('--vna', type=str, help='select VNA to plot for, options(zvh, trvna).')
     args = parser.parse_args()
     directory = args.directory
     outdir = args.outdir
@@ -339,8 +369,10 @@ def main():
         directory = ''
     if args.pattern is None:
         pattern = ''
+    if args.vna is None:
+        vna = 'zvh'
 
-    data = read_data(directory, pattern, args.verbose, args.site)
+    data = read_data(directory, pattern, args.verbose, args.site, args.vna)
 
     if args.mode == 'vswr':
         plot_vswr(data, directory=outdir)
@@ -356,3 +388,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    # data = read_data('/home/radar/testing/vna_plotting/', '', False, 'rkn', 'trvna')
