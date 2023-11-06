@@ -97,7 +97,7 @@ def read_data(directory, pattern, verbose=False, site='', vna='zvh'):
             df = pd.read_csv(file, skiprows=skiprows, encoding='cp1252')
         elif vna == 'trvna':
             df = pd.read_csv(file)
-            all_data.date = '2023-09-26'
+            all_data.date = '2023-09-13'
         else:
             print(f'Unknown VNA {vna}: Exiting...')
             exit(1)
@@ -108,16 +108,15 @@ def read_data(directory, pattern, verbose=False, site='', vna='zvh'):
         magnitude = None
         phase = None
         for key in keys:
-            if 'unnamed' in key.lower():  # Break from loop after the first ZVH sweep.
-                verbose and print('\t-end of first sweep')
-                break
+            # if 'unnamed' in key.lower():  # Break from loop after the first ZVH sweep.
+            #     verbose and print('\t-end of first sweep')
+            #     break
             if 'freq' in key.lower():
                 freq = df[key]
                 verbose and print(f'\t-FREQUENCY data found in: {name}')
             if 'vswr' in key.lower():
                 vswr = df[key]
                 verbose and print(f'\t-VSWR data found in: {name}')
-                print(f"VSWR: {vswr}, type: {vswr.type}")
             if 'mag' in key.lower():
                 magnitude = df[key]
                 verbose and print(f'\t-MAGNITUDE data found in: {name}')
@@ -175,11 +174,10 @@ def plot_rx_path(data, directory=''):
     xmax = 20.0e6
 
     fig, ax = plt.subplots(2, 1, figsize=[13, 8])
-    # fig.suptitle(f'TRVNA Data: RX Path per Antenna\n{data.site} {data.date}')
-    fig.suptitle(f'TRVNA Data: RX Path per Antenna\nInuvik {data.date}')
+    fig.suptitle(f'TRVNA Data: RX Path per Antenna\n{data.site} {data.date}')
     for index, name in enumerate(data.names):
         mean_magnitude += data.datas[index].magnitude
-        # mean_phase += data.datas[index].phase
+        mean_phase += data.datas[index].phase
         total_antennas += 1.0
         if np.min(data.datas[index].freq) < xmin:
             xmin = np.min(data.datas[index].freq)
@@ -187,12 +185,12 @@ def plot_rx_path(data, directory=''):
             xmax = np.max(data.datas[index].freq)
         ax[0].plot(data.datas[index].freq, data.datas[index].magnitude, label=data.datas[index].name,
                     linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
-        # ax[1].plot(data.datas[index].freq, data.datas[index].phase, label=data.datas[index].name)
+        ax[1].plot(data.datas[index].freq, data.datas[index].phase, label=data.datas[index].name)
 
     mean_magnitude /= total_antennas
     mean_phase /= total_antennas
-    ax[0].plot(data.datas[0].freq, mean_magnitude, '--k', label='mean magnitude')
-    # ax[1].plot(data.datas[0].freq, mean_phase, '--k', label='mean phase')
+    ax[0].plot(data.datas[0].freq, mean_magnitude, '--k', label='mean')
+    ax[1].plot(data.datas[0].freq, mean_phase, '--k', label='mean')
 
     ax[0].legend(loc='center', fancybox=True, ncol=7, bbox_to_anchor=[0.5, -0.4])
     ax[0].grid()
@@ -248,24 +246,23 @@ def plot_vswr(data, directory=''):
     outfile = f'{directory}vswr_{data.site}_{data.date}.png'
     mean_vswr = 0.0
     total_antennas = 0.0
-    xmin = 20.0e6
-    xmax = 0.0
+    xmin = 8.0e6
+    xmax = 20.0e6
 
     plt.figure(figsize=[13, 8])
-    # plt.suptitle(f'TRVNA Data: VSWR per Antenna\n{data.site} {data.date}')
-    plt.suptitle(f'TRVNA Data: VSWR per Antenna\nSaskatoon {data.date}')
+    plt.suptitle(f'TRVNA Data: VSWR per Antenna\n{data.site} {data.date}')
     for index, name in enumerate(data.names):
-        mean_vswr += data.datas[index].vswr
+        # mean_vswr += data.datas[index].vswr
         total_antennas += 1.0
-        if np.min(data.datas[index].freq) < xmin:
-            xmin = np.min(data.datas[index].freq)
-        if np.max(data.datas[index].freq) > xmax:
-            xmax = np.max(data.datas[index].freq)
+        # if np.min(data.datas[index].freq) < xmin:
+        #     xmin = np.min(data.datas[index].freq)
+        # if np.max(data.datas[index].freq) > xmax:
+        #     xmax = np.max(data.datas[index].freq)
         plt.plot(data.datas[index].freq, data.datas[index].vswr, label=data.datas[index].name,
                          linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
 
-    mean_vswr /= total_antennas
-    plt.plot(data.datas[0].freq, mean_vswr, '--k', label='mean')
+    # mean_vswr /= total_antennas
+    # plt.plot(data.datas[0].freq, mean_vswr, '--k', label='mean')
 
     # plt.legend(loc='best', fancybox=True, ncol=3)
     plt.legend(loc='center', fancybox=True, ncol=7, bbox_to_anchor=[0.5, -0.2])
