@@ -112,16 +112,16 @@ def read_data(directory, pattern, verbose=False, site='', vna='zvh'):
             #     verbose and print('\t-end of first sweep')
             #     break
             if 'freq' in key.lower():
-                freq = df[key]
+                freq = pd.to_numeric(df[key], errors='coerce')
                 verbose and print(f'\t-FREQUENCY data found in: {name}')
             if 'vswr' in key.lower():
-                vswr = df[key]
+                vswr = pd.to_numeric(df[key], errors='coerce')
                 verbose and print(f'\t-VSWR data found in: {name}')
             if 'mag' in key.lower():
-                magnitude = df[key]
+                magnitude = pd.to_numeric(df[key], errors='coerce')
                 verbose and print(f'\t-MAGNITUDE data found in: {name}')
             if 'pha' in key.lower():
-                phase = df[key]
+                phase = pd.to_numeric(df[key], errors='coerce')
                 verbose and print(f'\t-PHASE data found in: {name}')
 
         data = RSData(name=name, freq=freq, vswr=vswr, magnitude=magnitude, phase=phase)
@@ -258,8 +258,10 @@ def plot_vswr(data, directory=''):
         #     xmin = np.min(data.datas[index].freq)
         # if np.max(data.datas[index].freq) > xmax:
         #     xmax = np.max(data.datas[index].freq)
-        plt.plot(data.datas[index].freq, data.datas[index].vswr, label=data.datas[index].name,
-                         linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
+        plt.plot(data.datas[index].freq,
+                 data.datas[index].vswr,
+                 label=data.datas[index].name,
+                 linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
 
     # mean_vswr /= total_antennas
     # plt.plot(data.datas[0].freq, mean_vswr, '--k', label='mean')
@@ -368,8 +370,10 @@ def main():
         pattern = ''
     if args.vna is None:
         vna = 'zvh'
+    else:
+        vna = args.vna
 
-    data = read_data(directory, pattern, args.verbose, args.site, args.vna)
+    data = read_data(directory, pattern, args.verbose, args.site, vna)
 
     if args.mode == 'vswr':
         plot_vswr(data, directory=outdir)
