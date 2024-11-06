@@ -22,6 +22,7 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+from datetime import datetime
 
 
 @dataclass(frozen=True, order=True)
@@ -94,21 +95,23 @@ def read_data(directory, pattern, date, verbose=False, site='', vna='zvh'):
                 if 'date' in str(row).lower():
                     date = row.iloc[1].replace(' ', '').split('/')
                     date = '-'.join(date[::-1])
+                    date = f'{datetime.strptime(date, "%Y-%m-%d").date()}'
                     all_data.date = date
                 if '[hz]' in str(row).lower():
                     break
 
             # The ZVH .csv files are in format cp1252 not utf-8 so using utf-8 will break on degrees symbol.
             df = pd.read_csv(file, skiprows=skiprows, encoding='cp1252')
+        # trvna only stores 5 columns of values in csv format (no headings)
+        # Frequency |  Re(VSWR) |  Im(VSWR) | Re(Phase) | Im(Phase)
+        # OR
+        # Frequency |  Re(Mag)  |  Im(Mag)  | Re(Phase) | Im(Phase)
+        # Either way we need columns 0, 1 and 3 (don't need imaginary parts)
         elif vna == 'trvna':
             df_temp = pd.read_csv(file)
             df = {}
             key_array = []
             for key in df_temp.keys():
-                """if '0.000' in key and 'E+00' in key:
-                    continue
-                else:
-                    key_array.append(key)"""
                 key_array.append(key)
             if 'vswr' in pattern.lower():
                 df['Frequency [Hz]'] = df_temp[key_array[0]]
@@ -206,10 +209,10 @@ def plot_rx_path(data, directory=''):
                     linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
         ax[1].plot(data.datas[index].freq/1E+6, data.datas[index].phase, label=data.datas[index].name)
 
-    mean_magnitude /= total_antennas
-    mean_phase /= total_antennas
-    ax[0].plot(data.datas[0].freq/1E+6, mean_magnitude, '--k', label='mean')
-    ax[1].plot(data.datas[0].freq/1E+6, mean_phase, '--k', label='mean')
+    #mean_magnitude /= total_antennas
+    #mean_phase /= total_antennas
+    #ax[0].plot(data.datas[0].freq/1E+6, mean_magnitude, '--k', label='mean')
+    #ax[1].plot(data.datas[0].freq/1E+6, mean_phase, '--k', label='mean')
 
     xmin /= 1E+6
     xmax /= 1E+6
