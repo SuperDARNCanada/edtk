@@ -103,9 +103,9 @@ def read_data(directory, pattern, date, verbose=False, site='', vna='zvh'):
             # The ZVH .csv files are in format cp1252 not utf-8 so using utf-8 will break on degrees symbol.
             df = pd.read_csv(file, skiprows=skiprows, encoding='cp1252')
         # trvna only stores 5 columns of values in csv format (no headings)
-        # Frequency |  Re(VSWR) |  Im(VSWR) | Re(Phase) | Im(Phase)
+        # Frequency |  Re(VSWR) |  Im(VSWR) | Re(Phase) | Im(Phase)    -- for vswr
         # OR
-        # Frequency |  Re(Mag)  |  Im(Mag)  | Re(Phase) | Im(Phase)
+        # Frequency |  Re(Mag)  |  Im(Mag)  | Re(Phase) | Im(Phase)    -- for rxpath
         # Either way we need columns 0, 1 and 3 (don't need imaginary parts)
         elif vna == 'trvna':
             df_temp = pd.read_csv(file)
@@ -122,6 +122,17 @@ def read_data(directory, pattern, date, verbose=False, site='', vna='zvh'):
                 df['Magnitude'] = df_temp[key_array[1]]
                 df['Phase'] = df_temp[key_array[3]]
             all_data.date = date
+        elif vna == 'osc':
+            df = pd.read_csv(file)
+            skiprows = 0
+            for index, row in df.iterrows():
+                skiprows += 1
+                if 'fd max' in str(row).lower():
+                    skiprows += 1
+                    break
+            all_data.date = date
+            df = pd.read_csv(file, skiprows=skiprows, encoding='cp1252')
+
         else:
             print(f'Unknown VNA {vna}: Exiting...')
             exit(1)
@@ -141,7 +152,7 @@ def read_data(directory, pattern, date, verbose=False, site='', vna='zvh'):
             if 'vswr' in key.lower():
                 vswr = pd.to_numeric(df[key], errors='coerce')
                 verbose and print(f'\t-VSWR data found in: {name}')
-            if 'mag' in key.lower():
+            if 'mag' in key.lower() or 'fd max' in key.lower():
                 magnitude = pd.to_numeric(df[key], errors='coerce')
                 verbose and print(f'\t-MAGNITUDE data found in: {name}')
             if 'pha' in key.lower():
@@ -346,9 +357,9 @@ def plot_sky_noise(data, directory=''):
     xmax = 0.0
 
     fig, ax = plt.subplots(1, 1, figsize=[13, 8])
-    fig.suptitle(f'Rohde & Schwarz Data: Sky Noise\n{data.site} {data.date}')
+    fig.suptitle(f'{data.vna.upper()} Data: Sky Noise\n{data.site} {data.date}')
     for index, name in enumerate(data.names):
-        #mean_magnitude += data.datas[index].magnitude
+        mean_magnitude += data.datas[index].magnitude
         total_antennas += 1.0
         if np.min(data.datas[index].freq) < xmin:
             xmin = np.min(data.datas[index].freq)
@@ -356,8 +367,8 @@ def plot_sky_noise(data, directory=''):
             xmax = np.max(data.datas[index].freq)
         ax.plot(data.datas[index].freq, data.datas[index].magnitude, label=data.datas[index].name)
 
-    #mean_magnitude /= total_antennas
-    #ax.plot(data.datas[0].freq, mean_magnitude, '--k', label='mean magnitude')
+    mean_magnitude /= total_antennas
+    ax.plot(data.datas[0].freq, mean_magnitude, '--k', label='mean magnitude')
 
     plt.legend(loc='center', fancybox=True, ncol=7, bbox_to_anchor=[0.5, -0.4])
     ax.grid()
@@ -384,7 +395,7 @@ def main():
     parser.add_argument('-p', '--pattern', type=str, help='the file naming pattern less the appending numbers.')
     parser.add_argument('-v', '--verbose', action='store_true', help='explain what is being done verbosely.')
     parser.add_argument('-m', '--mode', type=str, help='select the plot mode, options(vswr, path, sky).')
-    parser.add_argument('--vna', type=str, help='select VNA to plot for, options(zvh, trvna).')
+    parser.add_argument('--vna', type=str, help='select VNA to plot for, options(zvh, trvna, osc).')
     parser.add_argument('--date', type=str, help='date of the data to be plotted (yyyy-mm-dd)')
     args = parser.parse_args()
     directory = args.directory
