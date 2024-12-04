@@ -87,27 +87,36 @@ def read_data(directory, pattern, date, verbose=False, site='', vna='zvh'):
         name = os.path.basename(file).replace('.csv', '')
         verbose and print(f'loading file: {file}')
         if vna == 'zvh':
+            # Determine which row the data starts on
             df = pd.read_csv(file, encoding='cp1252')
             all_data.date = date
             skiprows = 0
+            endrow = 0
             for index, row in df.iterrows():
                 skiprows += 1
                 if 'date' in str(row).lower():
-                    date = row.iloc[1].replace(' ', '').split('/')
-                    date = '-'.join(date[::-1])
-                    date = f'{datetime.strptime(date, "%Y-%m-%d").date()}'
-                    all_data.date = date
+                    date = datetime.strptime(row.iloc[1], "%m/%d/%Y")
+                    iso_date = datetime.strftime(date, "%Y-%m-%d")
+                    all_data.date = iso_date
                 if '[hz]' in str(row).lower():
                     break
 
+            # Determine what row the data ends on
+            for index, row in df.iterrows():
+                endrow += 1
+                if 'memory' in str(row).lower():
+                    endrow -=1 # Move back one row to account for empty line
+                    break
+
             # The ZVH .csv files are in format cp1252 not utf-8 so using utf-8 will break on degrees symbol.
-            df = pd.read_csv(file, skiprows=skiprows, encoding='cp1252')
-        # trvna only stores 5 columns of values in csv format (no headings)
-        # Frequency |  Re(VSWR) |  Im(VSWR) | Re(Phase) | Im(Phase)    -- for vswr
-        # OR
-        # Frequency |  Re(Mag)  |  Im(Mag)  | Re(Phase) | Im(Phase)    -- for rxpath
-        # Either way we need columns 0, 1 and 3 (don't need imaginary parts)
+            df = pd.read_csv(file, skiprows=skiprows, nrows=endrow-skiprows, encoding='cp1252')
+
         elif vna == 'trvna':
+            # trvna only stores 5 columns of values in csv format (no headings)
+            # Frequency |  Re(VSWR) |  Im(VSWR) | Re(Phase) | Im(Phase)    -- for vswr
+            # OR
+            # Frequency |  Re(Mag)  |  Im(Mag)  | Re(Phase) | Im(Phase)    -- for rxpath
+            # Either way we need columns 0, 1 and 3 (don't need imaginary parts)
             df_temp = pd.read_csv(file)
             df = {}
             key_array = []
@@ -143,9 +152,11 @@ def read_data(directory, pattern, date, verbose=False, site='', vna='zvh'):
         magnitude = None
         phase = None
         for key in keys:
-            # if 'unnamed' in key.lower():  # Break from loop after the first ZVH sweep.
-            #     verbose and print('\t-end of first sweep')
-            #     break
+            if not isinstance(df[key], (int,float)):
+                pass
+            if 'unnamed' in key.lower():  # Break from loop after the first ZVH sweep.
+                verbose and print('\t-end of first sweep')
+                break
             if 'freq' in key.lower():
                 freq = pd.to_numeric(df[key], errors='coerce')
                 verbose and print(f'\t-FREQUENCY data found in: {name}')
@@ -156,7 +167,9 @@ def read_data(directory, pattern, date, verbose=False, site='', vna='zvh'):
                 magnitude = pd.to_numeric(df[key], errors='coerce')
                 verbose and print(f'\t-MAGNITUDE data found in: {name}')
             if 'pha' in key.lower():
-                phase = pd.to_numeric(df[key], errors='coerce')
+                # phase = pd.to_numeric(df[key], errors='coerce')
+                phase = df[key]
+                phase = (phase + 180) % 360 - 180  # Ensure phase values are between -180 to 180 degrees
                 verbose and print(f'\t-PHASE data found in: {name}')
 
         data = RSData(name=name, freq=freq, vswr=vswr, magnitude=magnitude, phase=phase)
@@ -218,7 +231,12 @@ def plot_rx_path(data, directory=''):
             xmax = np.max(data.datas[index].freq)
         ax[0].plot(data.datas[index].freq/1E+6, data.datas[index].magnitude, label=data.datas[index].name,
                     linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
+<<<<<<< Updated upstream
         ax[1].plot(data.datas[index].freq/1E+6, data.datas[index].phase, label=data.datas[index].name)
+=======
+        ax[1].plot(data.datas[index].freq, data.datas[index].phase, label=data.datas[index].name,
+                    linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
+>>>>>>> Stashed changes
 
     #mean_magnitude /= total_antennas
     #mean_phase /= total_antennas
@@ -389,15 +407,25 @@ def main():
                                                  'Given a set of Rohde & Schwarz ZVH files that have been converted to'
                                                  '.csv format this program will generate a series of comparison plots'
                                                  'for engineering diagnostics.')
+<<<<<<< Updated upstream
     parser.add_argument('-s', '--site', type=str, help='name of the site this data is from, eg: INV, SAS,...')
     parser.add_argument('-d', '--directory', type=str, help='directory containing ZVH files with data to be plotted.')
+=======
+    parser.add_argument('-s', '--site', type=str, help='name of the site this data is from, eg: Inuvik, Saskatoon,...')
+    parser.add_argument('-d', '--directory', type=str, default='', help='directory containing ZVH files with data to be plotted.')
+>>>>>>> Stashed changes
     parser.add_argument('-o', '--outdir', type=str, default='', help='directory to save output plots.')
-    parser.add_argument('-p', '--pattern', type=str, help='the file naming pattern less the appending numbers.')
+    parser.add_argument('-p', '--pattern', type=str, default='', help='the file naming pattern less the appending numbers.')
     parser.add_argument('-v', '--verbose', action='store_true', help='explain what is being done verbosely.')
     parser.add_argument('-m', '--mode', type=str, help='select the plot mode, options(vswr, path, sky).')
+<<<<<<< Updated upstream
     parser.add_argument('--vna', type=str, help='select VNA to plot for, options(zvh, trvna, osc).')
     parser.add_argument('--date', type=str, help='date of the data to be plotted (yyyy-mm-dd)')
+=======
+    parser.add_argument('--vna', required=True, type=str, help='select VNA to plot for, options(zvh, trvna).')
+>>>>>>> Stashed changes
     args = parser.parse_args()
+    
     directory = args.directory
     outdir = args.outdir
     if outdir == '':
@@ -405,6 +433,7 @@ def main():
     pattern = args.pattern
     date = args.date
 
+<<<<<<< Updated upstream
     if args.directory is None:
         directory = ''
     if args.pattern is None:
@@ -417,6 +446,9 @@ def main():
         date = ''
 
     data = read_data(directory, pattern, date, args.verbose, args.site, vna)
+=======
+    data = read_data(directory, pattern, args.verbose, args.site, args.vna)
+>>>>>>> Stashed changes
 
     if args.mode == 'vswr':
         plot_vswr(data, directory=outdir)
