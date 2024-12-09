@@ -227,17 +227,22 @@ def calculate_ticks(ax, ticks, round_to=0.1, center=False):
     return values*round_to
 
 
-def plot_rxpath(data, directory='', show_variance=False):
+def plot_rxpath(data: RSAllData, directory: str = '', plot_stats: bool = False):
     """
-    Create a plot of frequency vs. magnitude and frequency vs. phase for each antenna receive path.
-
+    Create a plot of magnitude and phase vs frequency for each antenna receive path. Optionally, a
+    third plot showing variance stats can be plotted, showing the Root Mean Square Error (RMSE) and
+    Mean Absolute Deviation (MAD) for both magnitude and phase.
+    
     Parameters
     ----------
-        data : dataclass
-            A dataclass containing Rohde & Schwarz ZVH measured data; must contain vswr and frequency.
+        data : RSAllData dataclass
+            A dataclass containing measured data from a ZVH4 or TRVNA. Data must contain frequency,
+            magnitude, and phase data.
         directory : str
             The output file directory to save the plot in.
-
+        plot_stats : bool
+            If true, adds a third plot showing variance stats for the magnitude and phase data. If
+            false, only magnitude and phase will be plotted.
     Returns
     -------
         None
@@ -262,23 +267,24 @@ def plot_rxpath(data, directory='', show_variance=False):
     LINE_STYLES = ['solid', 'dashed', 'dashdot', 'dotted']
     NUM_COLOURS = 10
 
+
     outfile = f'{directory}rxpath_{data.site_code}_{data.date}.png'
+    if plot_stats:
+        fig, ax = plt.subplots(3, 1, figsize=[13, 10])
+    else: 
+        fig, ax = plt.subplots(2, 1, figsize=[13, 8])
+    fig.suptitle(f'{data.device.upper()} Data: Receive Path per Antenna\n{data.site_name} {data.date}')
 
-
-
+    # Construct 2D arrays for each data type for stat calculations.
     frequency_alldata = np.array([d.freq for d in data.datas])
     magnitude_alldata = np.array([d.magnitude for d in data.datas])
     phase_unwrapped_alldata = np.array([d.phase_unwrapped for d in data.datas])
 
-    # fig, ax = plt.subplots(2, 1, figsize=[13, 8])
-    fig, ax = plt.subplots(3, 1, figsize=[13, 10])
-
-    fig.suptitle(f'{data.device.upper()} Data: RX Path per Antenna\n{data.site_name} {data.date}')
     for index, name in enumerate(data.names):
         # Scale freq by 1E+6 to make x-axis units MHz instead of Hz
-        ax[0].plot(data.datas[index].freq/1E+6, data.datas[index].magnitude, label=data.datas[index].name,
+        ax[0].plot(data.datas[index].freq/1E+6, data.datas[index].magnitude, label=name,
                     linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
-        ax[1].plot(data.datas[index].freq/1E+6, data.datas[index].phase, label=data.datas[index].name,
+        ax[1].plot(data.datas[index].freq/1E+6, data.datas[index].phase, label=name,
                     linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
 
     # Plot average mag and phase
@@ -289,40 +295,9 @@ def plot_rxpath(data, directory='', show_variance=False):
     ax[1].plot(data.datas[0].freq/1E+6, mean_phase, '--k', label='mean')
 
 
-    # Plot data variance statistics
-    max_mag = np.max(magnitude_alldata, axis=0)
-    min_mag = np.min(magnitude_alldata, axis=0)
-    max_pha = np.max(phase_unwrapped_alldata, axis=0)
-    min_pha = np.min(phase_unwrapped_alldata, axis=0)
-    rmse_mag = np.sqrt(np.mean(np.square(magnitude_alldata - mean_magnitude), 0))
-    rmse_pha = np.sqrt(np.mean(np.square(phase_unwrapped_alldata - mean_phase_unwrapped), 0))
-    mad_mag = np.mean(np.abs(magnitude_alldata - mean_magnitude), 0)
-    mad_pha = np.mean(np.abs(phase_unwrapped_alldata - mean_phase_unwrapped), 0)
-
-    ax[2].set_title('Magnitude and Phase Variation')
-    ax2_left = ax[2]
-    # ax2_left.plot(data.datas[0].freq/1E+6, max_mag - min_mag, color='tab:blue', label='Magnitude range')
-    ax2_left.plot(data.datas[0].freq/1E+6, rmse_mag, color='tab:blue', linestyle='--', label='Magnitude root mean squared error')
-    ax2_left.plot(data.datas[0].freq/1E+6, mad_mag, color='tab:blue', linestyle='-', label='Magnitude mean absolute deviation')
-    ax2_left.set_ylabel('Magnitude [dB]', color='tab:blue')
-    # ax0_r.set_ylim([0, 10])
-
-    ax2_right = ax[2].twinx()
-    # ax2_right.plot(data.datas[0].freq/1E+6, max_pha - min_pha, color='tab:red', label='Phase range')
-    ax2_right.plot(data.datas[0].freq/1E+6, rmse_pha, color='tab:red', linestyle='--', label='Phase root mean squared error')
-    ax2_right.plot(data.datas[0].freq/1E+6, mad_pha, color='tab:red', linestyle='-', label='Phase mean absolute deviation')
-    ax2_right.set_ylabel('Phase [°]', color='tab:red')
-    # ax1_r.set_ylim([0, 50])
-
-    ax[2].set_xlabel('Frequency [MHz]')
-
-
-
-
-
-    # Define plot limits
-    xmin = np.min(frequency_alldata)
-    xmax = np.max(frequency_alldata)
+    # Define plot limits. Phase is wrapped, so limits are fixed.
+    xmin = np.min(frequency_alldata) / 1E+6 # / 1E+6 to change from Hz to MHz
+    xmax = np.max(frequency_alldata) / 1E+6
     ymin = np.round(np.min(magnitude_alldata) - 1) # Adjust limits to add whitespace above/below data
     ymax = np.round(np.max(magnitude_alldata) + 1)
 
@@ -333,19 +308,39 @@ def plot_rxpath(data, directory='', show_variance=False):
     if ymax < 30:
         ymax = 30 # dB
 
-    # Change x limits to MHz from Hz
-    xmin /= 1E+6
-    xmax /= 1E+6
 
-    ax2_left.set_ylim(bottom=0)
-    ax2_right.set_ylim(bottom=0)
-    ax2_left.set_yticks(calculate_ticks(ax2_left, 5, 0.5))
-    ax2_right.set_yticks(calculate_ticks(ax2_right, 5, 5))
-    ax2_left.set_xlim([xmin, xmax])
-    ax2_right.set_xlim([xmin, xmax])
-    ax2_left.legend(loc='upper left')
-    ax2_right.legend(loc='upper right')
-    ax2_left.grid()
+    if plot_stats:
+        # Plot data variance statistics
+        rmse_mag = np.sqrt(np.mean(np.square(magnitude_alldata - mean_magnitude), 0))
+        rmse_pha = np.sqrt(np.mean(np.square(phase_unwrapped_alldata - mean_phase_unwrapped), 0))
+        mad_mag = np.mean(np.abs(magnitude_alldata - mean_magnitude), 0)
+        mad_pha = np.mean(np.abs(phase_unwrapped_alldata - mean_phase_unwrapped), 0)
+
+        ax[2].set_title('Magnitude and Phase Variation')
+        ax2_left = ax[2]
+        ax2_left.plot(data.datas[0].freq/1E+6, rmse_mag, color='tab:blue', linestyle='--', label='Root Mean Squared Error (RMSE)')
+        ax2_left.plot(data.datas[0].freq/1E+6, mad_mag, color='tab:blue', linestyle='-', label='Mean Absolute Deviation (MAD)')
+        ax2_left.set_ylabel('Magnitude [dB]', color='tab:blue')
+
+        ax2_right = ax[2].twinx()
+        ax2_right.plot(data.datas[0].freq/1E+6, rmse_pha, color='tab:red', linestyle='--', label='Root Mean Squared Error (RMSE)')
+        ax2_right.plot(data.datas[0].freq/1E+6, mad_pha, color='tab:red', linestyle='-', label='Mean Absolute Deviation (MAD)')
+        ax2_right.set_ylabel('Phase [°]', color='tab:red')
+
+        ax[2].set_xlabel('Frequency [MHz]')
+
+        ax2_left.set_ylim(bottom=0)
+        ax2_right.set_ylim(bottom=0)
+        ax2_left.set_yticks(calculate_ticks(ax2_left, 5, 0.5))
+        ax2_right.set_yticks(calculate_ticks(ax2_right, 5, 5))
+        ax2_left.tick_params(axis='y', colors='tab:blue')
+        ax2_right.tick_params(axis='y', colors='tab:red')
+        ax2_left.set_xlim([xmin, xmax])
+        ax2_right.set_xlim([xmin, xmax])
+        ax2_left.legend(loc='upper left')
+        ax2_right.legend(loc='upper right')
+        ax2_left.grid()
+
 
     ax[0].legend(loc='center', fancybox=True, ncol=7, bbox_to_anchor=[0.5, -0.4])
     ax[0].grid()
@@ -525,7 +520,7 @@ def main():
                              'will omit files containing 18 and 19 in the filename.')
     parser.add_argument('--date', type=str, default='1970-01-01', 
                         help='date of the data to be plotted (yyyy-mm-dd)')
-    parser.add_argument('--plot_variance', action='store_true', 
+    parser.add_argument('--plot_stats', action='store_true', 
                         help='Adds an extra plot showing the variance in the magnitude/vswr and '
                              'phase across all plotted data.')
     parser.add_argument('-v', '--verbose', action='store_true', 
@@ -563,7 +558,7 @@ def main():
         filter_list = []
     else:
         filter_list = args.filter
-    plot_variance = args.plot_variance
+    plot_stats = args.plot_stats
 
     data = read_data(directory=directory, pattern=pattern, date=date, verbose=verbose, 
                      site_code=site_code, site_name=site_name, device=device, mode=mode, 
@@ -573,7 +568,7 @@ def main():
     if args.mode == 'vswr':
         plot_vswr(data, directory=outdir)
     elif args.mode == 'rxpath':
-        plot_rxpath(data, directory=outdir, show_variance=plot_variance)
+        plot_rxpath(data, directory=outdir, plot_stats=plot_stats)
     elif args.mode == "skynoise":
         plot_skynoise(data, directory=outdir)
     else:
