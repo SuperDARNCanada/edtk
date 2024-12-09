@@ -361,7 +361,7 @@ def plot_rxpath(data: RSAllData, directory: str = '', plot_stats: bool = False):
     return
 
 
-def plot_vswr(data, directory=''):
+def plot_vswr(data, directory='', plot_stats=False):
     """
     Create a plot of frequency vs. voltage standing wave ratio (vswr) for each antenna.
 
@@ -401,30 +401,42 @@ def plot_vswr(data, directory=''):
     xmax = 20.0e6 # Hz
 
     plt.figure(figsize=[13, 8])
+    # if plot_stats:
+    #     fig, ax = plt.subplots(3, 1, figsize=[13, 10])
+    # else: 
+    #     fig, ax = plt.subplots(2, 1, figsize=[13, 8])
     plt.suptitle(f'{data.device.upper()} Data: VSWR per Antenna\n{data.site_name} {data.date}')
+    
+    # Construct 2D arrays for each data type for stat calculations.
+    frequency_alldata = np.array([d.freq for d in data.datas])
+    vswr_alldata = np.array([d.vswr for d in data.datas])
+    phase_unwrapped_alldata = np.array([d.phase_unwrapped for d in data.datas])
+
+
     for index, name in enumerate(data.names):
-        mean_vswr += data.datas[index].vswr
-        total_antennas += 1.0
-        if np.min(data.datas[index].freq) < xmin:
-            xmin = np.min(data.datas[index].freq)
-        if np.max(data.datas[index].freq) > xmax:
-            xmax = np.max(data.datas[index].freq)
         plt.plot(data.datas[index].freq/1E+6,
                  data.datas[index].vswr,
-                 label=data.datas[index].name,
+                 label=name,
                  linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
 
-    mean_vswr /= total_antennas
+    mean_vswr = np.mean(vswr_alldata, 0)
     plt.plot(data.datas[0].freq/1E+6, mean_vswr, '--k', label='mean')
 
-    xmin /= 1E+6  # MHz
-    xmax /= 1E+6  # MHz
+    # Define plot limits. Phase is wrapped, so limits are fixed.
+    xmin = np.min(frequency_alldata) / 1E+6 # / 1E+6 to change from Hz to MHz
+    xmax = np.max(frequency_alldata) / 1E+6
+    ymin = 1                                    # Minimum VSWR is 1
+    ymax = np.round(np.max(vswr_alldata) + 1)   # Adjust limits to add whitespace above/below data
+
+    # Set base plot limits for vswr plot
+    if ymax < 3:
+        ymax = 3 # dB
 
     # plt.legend(loc='best', fancybox=True, ncol=3)
     plt.legend(loc='center', fancybox=True, ncol=7, bbox_to_anchor=[0.5, -0.2])
     plt.grid()
     plt.xlim([xmin, xmax])
-    plt.ylim([1.0, 3.0])
+    plt.ylim([ymin, ymax])
     # plt.ticklabel_format(axis="x", style="sci", scilimits=(6, 6))
     plt.xlabel('Frequency [MHz]')
     plt.ylabel('VSWR')
