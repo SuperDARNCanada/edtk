@@ -125,7 +125,10 @@ def read_data(
                 skiprows += 1
                 # ZVH4 records specific time data was collected. Use this for the date instead.
                 if 'date' in str(row).lower():
-                    date = datetime.strptime(row.iloc[1], "%m/%d/%Y")
+                    try:
+                        date = datetime.strptime(row.iloc[1], "%m/%d/%Y")
+                    except:
+                        date = datetime.strptime(row.iloc[1], "%Y-%m-%d")
                     iso_date = datetime.strftime(date, "%Y-%m-%d")
                     all_data.date = iso_date
                 if '[hz]' in str(row).lower():
@@ -185,6 +188,7 @@ def read_data(
         vswr = None
         magnitude = None
         phase = None
+        phase_unwrapped = None
         for key in keys:
             if not isinstance(df[key], (int,float)):
                 pass
@@ -349,8 +353,6 @@ def plot_rxpath(data: RSAllData, directory: str = '', plot_stats: bool = False):
     ax[1].set_xlim([xmin, xmax])
     ax[1].set_yticks([180,90,0,-90,-180])
     ax[0].set_ylim([ymin, ymax])
-    # ax[0].ticklabel_format(axis="x", style="sci", scilimits=(6, 6))
-    # ax[1].ticklabel_format(axis="x", style="sci", scilimits=(6, 6))
     ax[1].set_xlabel('Frequency [MHz]')
     ax[0].set_ylabel('Magnitude [dB]')
     ax[1].set_ylabel('Phase [°]')
@@ -428,9 +430,10 @@ def plot_vswr(data: RSAllData, directory: str = '', plot_stats: bool = False):
     xmin = np.min(frequency_alldata) / 1E+6 # / 1E+6 to change from Hz to MHz
     xmax = np.max(frequency_alldata) / 1E+6
     ymin = 1                                    # Minimum VSWR is 1
-    ymax = np.round(np.max(vswr_alldata) + 1)   # Adjust limits to add whitespace above/below data
+    ymax = np.ceil(np.max(vswr_alldata))   # Adjust limits to add whitespace above/below data
 
     # Set base plot limits for vswr plot
+    print(ymax)
     if ymax < 3:
         ymax = 3 # dB
 
@@ -485,17 +488,21 @@ def plot_vswr(data: RSAllData, directory: str = '', plot_stats: bool = False):
     return
 
 
-def plot_skynoise(data, directory=''):
+def plot_skynoise(data: RSAllData, directory: str = '', plot_stats: bool = False):
     """
-    Create a plot of frequency vs. magnitude antenna test.
-
+    Create a spectrum plot showing sky noise as power vs frequency. Optionally, a second plot can be
+    added to show variance stats in the skynoise datasets plotted.
+    
     Parameters
     ----------
-        data : dataclass
-            A dataclass containing Rohde & Schwarz ZVH measured data; must contain magnitude and frequency.
+        data : RSAllData dataclass
+            A dataclass containing measured data from a ZVH4 or MDO3034. Data must contain frequency
+            and magnitude data.
         directory : str
             The output file directory to save the plot in.
-
+        plot_stats : bool
+            If true, adds a second plot showing variance stats for the magnitude data. If false,
+            only magnitude will be plotted.
     Returns
     -------
         None
@@ -515,36 +522,71 @@ def plot_skynoise(data, directory=''):
     plt.rc('legend', fontsize=SMALL_SIZE)  # legend fontsize
     plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
-    outfile = f'{directory}sky_noise_{data.site_code}_{data.date}.png'
-    mean_magnitude = 0.0
-    total_antennas = 0.0
-    xmin = 20.0e6
-    xmax = 0.0
+    # Make lines in a combination of the following line styles and colours, so there are 40 different line combos
+    # Set line style as follows: linestyle=LINE_STYLES[int(index/NUM_COLOURS)]
+    LINE_STYLES = ['solid', 'dashed', 'dashdot', 'dotted']
+    NUM_COLOURS = 10
 
-    fig, ax = plt.subplots(1, 1, figsize=[13, 8])
+    outfile = f'{directory}skynoise_{data.site_code}_{data.date}.png'
+    if plot_stats:
+        fig, ax = plt.subplots(2, 1, figsize=[13, 10])
+    else: 
+        fig, ax = plt.subplots(1, 1, figsize=[13, 8])
     fig.suptitle(f'{data.device.upper()} Data: Sky Noise\n{data.site_name} {data.date}')
+    
+    # Construct 2D arrays for each data type for stat calculations.
+    frequency_alldata = np.array([d.freq for d in data.datas])
+    magnitude_alldata = np.array([d.magnitude for d in data.datas])
+
     for index, name in enumerate(data.names):
-        mean_magnitude += data.datas[index].magnitude
-        total_antennas += 1.0
-        if np.min(data.datas[index].freq) < xmin:
-            xmin = np.min(data.datas[index].freq)
-        if np.max(data.datas[index].freq) > xmax:
-            xmax = np.max(data.datas[index].freq)
-        ax.plot(data.datas[index].freq, data.datas[index].magnitude, label=data.datas[index].name)
+        # Scale freq by 1E+6 to make x-axis units MHz instead of Hz
+        ax[0].plot(data.datas[index].freq/1E+6, data.datas[index].magnitude, label=name,
+                   linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
 
-    mean_magnitude /= total_antennas
-    ax.plot(data.datas[0].freq, mean_magnitude, '--k', label='mean magnitude')
+    mean_magnitude = np.mean(magnitude_alldata, 0)
+    ax[0].plot(data.datas[0].freq/1E+6, mean_magnitude, '--k', label='mean')
 
-    plt.legend(loc='center', fancybox=True, ncol=7, bbox_to_anchor=[0.5, -0.4])
-    ax.grid()
-    ax.set_xlim([xmin, xmax])
-    ax.ticklabel_format(axis="x", style="sci", scilimits=(6, 6))
-    ax.set_xlabel('Frequency [MHz]')
-    ax.set_ylabel('Magnitude [dBm]')
+    # Define plot limits. Phase is wrapped, so limits are fixed.
+    xmin = np.min(frequency_alldata) / 1E+6 # / 1E+6 to change from Hz to MHz
+    xmax = np.max(frequency_alldata) / 1E+6
+    ymin = np.round(np.min(magnitude_alldata) - 1) # Adjust limits to add whitespace above/below data
+    ymax = np.round(np.max(magnitude_alldata) + 1)
+
+    # Set base plot limits for magnitude plot
+    base_ymin = -100
+    base_ymax = -50
+    if ymin > base_ymin:
+        ymin = base_ymin # dB
+    if ymax < base_ymax:
+        ymax = base_ymax # dB
+
+    if plot_stats:
+        # Plot data variance statistics
+        rmse_mag = np.sqrt(np.mean(np.square(magnitude_alldata - mean_magnitude), 0))
+        mad_mag = np.mean(np.abs(magnitude_alldata - mean_magnitude), 0)
+
+        ax[1].set_title('Magnitude Variation')
+        ax[1].plot(data.datas[0].freq/1E+6, rmse_mag, color='tab:blue', linestyle='--', label='Root Mean Squared Error (RMSE)')
+        ax[1].plot(data.datas[0].freq/1E+6, mad_mag, color='tab:blue', linestyle='-', label='Mean Absolute Deviation (MAD)')
+        ax[1].set_ylabel('Power [dBm]', color='tab:blue')
+
+        ax[1].set_xlabel('Frequency [MHz]')
+
+        ax[1].set_ylim(bottom=0)
+        ax[1].tick_params(axis='y', colors='tab:blue')
+        ax[1].set_xlim([xmin, xmax])
+        ax[1].legend(loc='upper left')
+        ax[1].grid()
+
+    ax[0].legend(loc='center', fancybox=True, ncol=7, bbox_to_anchor=[0.5, -0.4])
+    ax[0].grid()
+    ax[0].set_xlim([xmin, xmax])
+    ax[0].set_xlabel('Frequency [MHz]')
+    ax[0].set_ylabel('Power [dBm]')
     plt.tight_layout()
     plt.savefig(outfile)
 
-    print(f'sky noise file created at: {outfile}')
+    print(f'Skynoise file created at: {outfile}')
     return
 
 
@@ -620,7 +662,7 @@ def main():
     elif args.mode == 'rxpath':
         plot_rxpath(data, directory=outdir, plot_stats=plot_stats)
     elif args.mode == "skynoise":
-        plot_skynoise(data, directory=outdir)
+        plot_skynoise(data, directory=outdir, plot_stats=plot_stats)
     else:
         print('Select a mode: vswr, rxpath, or skynoise') 
 
