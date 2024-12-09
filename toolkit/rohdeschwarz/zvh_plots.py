@@ -273,7 +273,7 @@ def plot_rxpath(data: RSAllData, directory: str = '', plot_stats: bool = False):
         fig, ax = plt.subplots(3, 1, figsize=[13, 10])
     else: 
         fig, ax = plt.subplots(2, 1, figsize=[13, 8])
-    fig.suptitle(f'{data.device.upper()} Data: Receive Path per Antenna\n{data.site_name} {data.date}')
+    fig.suptitle(f'{data.device.upper()} Data: Receive Path Amplification per Antenna\n{data.site_name} {data.date}')
 
     # Construct 2D arrays for each data type for stat calculations.
     frequency_alldata = np.array([d.freq for d in data.datas])
@@ -361,17 +361,22 @@ def plot_rxpath(data: RSAllData, directory: str = '', plot_stats: bool = False):
     return
 
 
-def plot_vswr(data, directory='', plot_stats=False):
+def plot_vswr(data: RSAllData, directory: str = '', plot_stats: bool = False):
     """
-    Create a plot of frequency vs. voltage standing wave ratio (vswr) for each antenna.
-
+    Create a plot of voltage standing wave ration (VSWR) and phase vs frequency for each antenna.
+    Optionally, a third plot showing variance stats can be plotted, showing the Root Mean Square
+    Error (RMSE) and Mean Absolute Deviation (MAD) for both VSWR and phase.
+    
     Parameters
     ----------
-        data : dataclass
-            A dataclass containing Rohde & Schwarz ZVH measured data; must contain vswr and frequency.
+        data : RSAllData dataclass
+            A dataclass containing measured data from a ZVH4 or TRVNA. Data must contain frequency,
+            VSWR, and phase data.
         directory : str
             The output file directory to save the plot in.
-
+        plot_stats : bool
+            If true, adds a third plot showing variance stats for the VSWR and phase data. If false,
+            only VSWR and phase will be plotted.
     Returns
     -------
         None
@@ -395,32 +400,29 @@ def plot_vswr(data, directory='', plot_stats=False):
     NUM_COLOURS = 10
 
     outfile = f'{directory}vswr_{data.site_code}_{data.date}.png'
-    mean_vswr = 0.0
-    total_antennas = 0.0
-    xmin = 8.0e6  # Hz
-    xmax = 20.0e6 # Hz
-
-    plt.figure(figsize=[13, 8])
-    # if plot_stats:
-    #     fig, ax = plt.subplots(3, 1, figsize=[13, 10])
-    # else: 
-    #     fig, ax = plt.subplots(2, 1, figsize=[13, 8])
-    plt.suptitle(f'{data.device.upper()} Data: VSWR per Antenna\n{data.site_name} {data.date}')
+    if plot_stats:
+        fig, ax = plt.subplots(3, 1, figsize=[13, 10])
+    else: 
+        fig, ax = plt.subplots(2, 1, figsize=[13, 8])
+    fig.suptitle(f'{data.device.upper()} Data: Voltage Standing Wave Ratio (VSWR) per Antenna\n{data.site_name} {data.date}')
     
     # Construct 2D arrays for each data type for stat calculations.
     frequency_alldata = np.array([d.freq for d in data.datas])
     vswr_alldata = np.array([d.vswr for d in data.datas])
     phase_unwrapped_alldata = np.array([d.phase_unwrapped for d in data.datas])
 
-
     for index, name in enumerate(data.names):
-        plt.plot(data.datas[index].freq/1E+6,
-                 data.datas[index].vswr,
-                 label=name,
-                 linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
+        ax[0].plot(data.datas[index].freq/1E+6, data.datas[index].vswr, label=name,
+                   linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
+        ax[1].plot(data.datas[index].freq/1E+6, data.datas[index].phase, label=name,
+                   linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
 
     mean_vswr = np.mean(vswr_alldata, 0)
-    plt.plot(data.datas[0].freq/1E+6, mean_vswr, '--k', label='mean')
+    mean_phase_unwrapped = np.mean(phase_unwrapped_alldata, 0) # Calculate mean with unwrapped data
+    mean_phase = (mean_phase_unwrapped + 180) % 360 - 180      # Plot the phase mean wrapped
+    ax[0].plot(data.datas[0].freq/1E+6, mean_vswr, '--k', label='mean')
+    ax[1].plot(data.datas[0].freq/1E+6, mean_phase, '--k', label='mean')
+
 
     # Define plot limits. Phase is wrapped, so limits are fixed.
     xmin = np.min(frequency_alldata) / 1E+6 # / 1E+6 to change from Hz to MHz
@@ -432,18 +434,54 @@ def plot_vswr(data, directory='', plot_stats=False):
     if ymax < 3:
         ymax = 3 # dB
 
-    # plt.legend(loc='best', fancybox=True, ncol=3)
-    plt.legend(loc='center', fancybox=True, ncol=7, bbox_to_anchor=[0.5, -0.2])
-    plt.grid()
-    plt.xlim([xmin, xmax])
-    plt.ylim([ymin, ymax])
-    # plt.ticklabel_format(axis="x", style="sci", scilimits=(6, 6))
-    plt.xlabel('Frequency [MHz]')
-    plt.ylabel('VSWR')
+    if plot_stats:
+        # Plot data variance statistics
+        rmse_vswr = np.sqrt(np.mean(np.square(vswr_alldata - mean_vswr), 0))
+        rmse_pha = np.sqrt(np.mean(np.square(phase_unwrapped_alldata - mean_phase_unwrapped), 0))
+        mad_vswr = np.mean(np.abs(vswr_alldata - mean_vswr), 0)
+        mad_pha = np.mean(np.abs(phase_unwrapped_alldata - mean_phase_unwrapped), 0)
+
+        ax[2].set_title('VSWR and Phase Variation')
+        ax2_left = ax[2]
+        ax2_left.plot(data.datas[0].freq/1E+6, rmse_vswr, color='tab:blue', linestyle='--', label='Root Mean Squared Error (RMSE)')
+        ax2_left.plot(data.datas[0].freq/1E+6, mad_vswr, color='tab:blue', linestyle='-', label='Mean Absolute Deviation (MAD)')
+        ax2_left.set_ylabel('VSWR', color='tab:blue')
+
+        ax2_right = ax[2].twinx()
+        ax2_right.plot(data.datas[0].freq/1E+6, rmse_pha, color='tab:red', linestyle='--', label='Root Mean Squared Error (RMSE)')
+        ax2_right.plot(data.datas[0].freq/1E+6, mad_pha, color='tab:red', linestyle='-', label='Mean Absolute Deviation (MAD)')
+        ax2_right.set_ylabel('Phase [°]', color='tab:red')
+
+        ax[2].set_xlabel('Frequency [MHz]')
+
+        ax2_left.set_ylim(bottom=0)
+        ax2_right.set_ylim(bottom=0)
+        ax2_left.set_yticks(calculate_ticks(ax2_left, 5, 0.1))
+        ax2_right.set_yticks(calculate_ticks(ax2_right, 5, 5))
+        ax2_left.tick_params(axis='y', colors='tab:blue')
+        ax2_right.tick_params(axis='y', colors='tab:red')
+        ax2_left.set_xlim([xmin, xmax])
+        ax2_right.set_xlim([xmin, xmax])
+        ax2_left.legend(loc='upper left')
+        ax2_right.legend(loc='upper right')
+        ax2_left.grid()
+
+
+    ax[0].legend(loc='center', fancybox=True, ncol=7, bbox_to_anchor=[0.5, -0.4])
+    ax[0].grid()
+    ax[1].grid()
+    ax[0].set_xlim([xmin, xmax])
+    ax[1].set_xlim([xmin, xmax])
+    ax[0].locator_params(axis='y', nbins=4)
+    ax[1].set_yticks([180,90,0,-90,-180])
+    ax[0].set_ylim([ymin, ymax])
+    ax[1].set_xlabel('Frequency [MHz]')
+    ax[0].set_ylabel('VSWR')
+    ax[1].set_ylabel('Phase [°]')
     plt.tight_layout()
     plt.savefig(outfile)
 
-    print(f'vswr plot created at: {outfile}')
+    print(f'VSWR plot created at: {outfile}')
     return
 
 
@@ -578,7 +616,7 @@ def main():
 
 
     if args.mode == 'vswr':
-        plot_vswr(data, directory=outdir)
+        plot_vswr(data, directory=outdir, plot_stats=plot_stats)
     elif args.mode == 'rxpath':
         plot_rxpath(data, directory=outdir, plot_stats=plot_stats)
     elif args.mode == "skynoise":
