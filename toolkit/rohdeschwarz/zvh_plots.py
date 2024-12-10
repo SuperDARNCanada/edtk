@@ -96,7 +96,8 @@ def read_data(
     files = glob.glob(f"{directory}/*/{pattern}*.csv")
     if files == []:
         files = sorted(glob.glob(f"{directory}/{pattern}*.csv"))
-    verbose and print(f"Following files found in {directory}:\n", [os.path.basename(f) for f in files])
+    verbose and print(f"Following files found in {directory}:\n", 
+                      [os.path.basename(f) for f in files])
 
     filtered_files = []
     print(filter_list)
@@ -141,7 +142,8 @@ def read_data(
                     endrow -=1 # Move back one row to account for empty line
                     break
 
-            # The ZVH .csv files are in format cp1252 not utf-8 so using utf-8 will break on degrees symbol.
+            # The ZVH .csv files are in format cp1252 not utf-8 so using utf-8 will break on degrees
+            # symbol.
             df = pd.read_csv(file, skiprows=skiprows, nrows=endrow-skiprows, encoding='cp1252')
 
         elif device == 'trvna':
@@ -204,11 +206,12 @@ def read_data(
                 verbose and print(f'\t-MAGNITUDE data found in: {name}')
             if 'pha' in key.lower() and phase is None:
                 phase = pd.to_numeric(df[key], errors='coerce')
-                phase = (phase + 180) % 360 - 180  # Ensure phase values are between -180 to 180 degrees
+                phase = (phase + 180) % 360 - 180  # Ensure phase values are between -180 to 180 deg
                 phase_unwrapped = pd.Series(np.unwrap(phase, period=360))
                 verbose and print(f'\t-PHASE data found in: {name}')
 
-        data = RSData(name=name, freq=freq, vswr=vswr, magnitude=magnitude, phase=phase, phase_unwrapped=phase_unwrapped)
+        data = RSData(name=name, freq=freq, vswr=vswr, magnitude=magnitude, phase=phase, 
+                      phase_unwrapped=phase_unwrapped)
         all_data.names.append(name)
         all_data.datas.append(data)
 
@@ -231,7 +234,7 @@ def calculate_ticks(ax, ticks, round_to=0.1, center=False):
     return values*round_to
 
 
-def plot_rxpath(data: RSAllData, directory: str = '', plot_stats: bool = False):
+def plot_rxpath(data: RSAllData, directory: str = '', filename: str = '', plot_stats: bool = False):
     """
     Create a plot of magnitude and phase vs frequency for each antenna receive path. Optionally, a
     third plot showing variance stats can be plotted, showing the Root Mean Square Error (RMSE) and
@@ -244,6 +247,8 @@ def plot_rxpath(data: RSAllData, directory: str = '', plot_stats: bool = False):
             magnitude, and phase data.
         directory : str
             The output file directory to save the plot in.
+        filename : str
+            The output file name to write the plot to. Defaults to rxpath_[Site ID]_YYYY-MM-DD.png
         plot_stats : bool
             If true, adds a third plot showing variance stats for the magnitude and phase data. If
             false, only magnitude and phase will be plotted.
@@ -266,18 +271,22 @@ def plot_rxpath(data: RSAllData, directory: str = '', plot_stats: bool = False):
     plt.rc('legend', fontsize=SMALL_SIZE)  # legend fontsize
     plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
-    # Make lines in a combination of the following line styles and colours, so there are 40 different line combos
-    # Set line style as follows: linestyle=LINE_STYLES[int(index/NUM_COLOURS)]
+    # Make lines in a combination of the following line styles and colours, so there are 40
+    # different line combos. Set line style as follows:
+    # linestyle=LINE_STYLES[int(index/NUM_COLOURS)]
     LINE_STYLES = ['solid', 'dashed', 'dashdot', 'dotted']
     NUM_COLOURS = 10
 
-
-    outfile = f'{directory}rxpath_{data.site_code}_{data.date}.png'
+    if filename == '':
+        outfile = f'{directory}rxpath_{data.site_code}_{data.date}.png'
+    else:
+        outfile = f'{directory}{filename}'
     if plot_stats:
         fig, ax = plt.subplots(3, 1, figsize=[13, 10])
     else: 
         fig, ax = plt.subplots(2, 1, figsize=[13, 8])
-    fig.suptitle(f'{data.device.upper()} Data: Receive Path Amplification per Antenna\n{data.site_name} {data.date}')
+    fig.suptitle(f'{data.device.upper()} Data: Receive Path Amplification per Antenna\n'
+                 f'{data.site_name} {data.date}')
 
     # Construct 2D arrays for each data type for stat calculations.
     frequency_alldata = np.array([d.freq for d in data.datas])
@@ -322,13 +331,17 @@ def plot_rxpath(data: RSAllData, directory: str = '', plot_stats: bool = False):
 
         ax[2].set_title('Magnitude and Phase Variation')
         ax2_left = ax[2]
-        ax2_left.plot(data.datas[0].freq/1E+6, rmse_mag, color='tab:blue', linestyle='--', label='Root Mean Squared Error (RMSE)')
-        ax2_left.plot(data.datas[0].freq/1E+6, mad_mag, color='tab:blue', linestyle='-', label='Mean Absolute Deviation (MAD)')
+        ax2_left.plot(data.datas[0].freq/1E+6, rmse_mag, color='tab:blue', linestyle='--', 
+                      label='Root Mean Squared Error (RMSE)')
+        ax2_left.plot(data.datas[0].freq/1E+6, mad_mag, color='tab:blue', linestyle='-', 
+                      label='Mean Absolute Deviation (MAD)')
         ax2_left.set_ylabel('Magnitude [dB]', color='tab:blue')
 
         ax2_right = ax[2].twinx()
-        ax2_right.plot(data.datas[0].freq/1E+6, rmse_pha, color='tab:red', linestyle='--', label='Root Mean Squared Error (RMSE)')
-        ax2_right.plot(data.datas[0].freq/1E+6, mad_pha, color='tab:red', linestyle='-', label='Mean Absolute Deviation (MAD)')
+        ax2_right.plot(data.datas[0].freq/1E+6, rmse_pha, color='tab:red', linestyle='--', 
+                       label='Root Mean Squared Error (RMSE)')
+        ax2_right.plot(data.datas[0].freq/1E+6, mad_pha, color='tab:red', linestyle='-', 
+                       label='Mean Absolute Deviation (MAD)')
         ax2_right.set_ylabel('Phase [°]', color='tab:red')
 
         ax[2].set_xlabel('Frequency [MHz]')
@@ -363,7 +376,7 @@ def plot_rxpath(data: RSAllData, directory: str = '', plot_stats: bool = False):
     return
 
 
-def plot_vswr(data: RSAllData, directory: str = '', plot_stats: bool = False):
+def plot_vswr(data: RSAllData, directory: str = '', filename: str = '', plot_stats: bool = False):
     """
     Create a plot of voltage standing wave ration (VSWR) and phase vs frequency for each antenna.
     Optionally, a third plot showing variance stats can be plotted, showing the Root Mean Square
@@ -376,6 +389,8 @@ def plot_vswr(data: RSAllData, directory: str = '', plot_stats: bool = False):
             VSWR, and phase data.
         directory : str
             The output file directory to save the plot in.
+        filename : str
+            The output file name to write the plot to. Defaults to vswr_[Site ID]_YYYY-MM-DD.png
         plot_stats : bool
             If true, adds a third plot showing variance stats for the VSWR and phase data. If false,
             only VSWR and phase will be plotted.
@@ -401,12 +416,16 @@ def plot_vswr(data: RSAllData, directory: str = '', plot_stats: bool = False):
     LINE_STYLES = ['solid', 'dashed', 'dashdot', 'dotted']
     NUM_COLOURS = 10
 
-    outfile = f'{directory}vswr_{data.site_code}_{data.date}.png'
+    if filename == '':
+        outfile = f'{directory}vswr_{data.site_code}_{data.date}.png'
+    else:
+        outfile = f'{directory}{filename}'
     if plot_stats:
         fig, ax = plt.subplots(3, 1, figsize=[13, 10])
     else: 
         fig, ax = plt.subplots(2, 1, figsize=[13, 8])
-    fig.suptitle(f'{data.device.upper()} Data: Voltage Standing Wave Ratio (VSWR) per Antenna\n{data.site_name} {data.date}')
+    fig.suptitle(f'{data.device.upper()} Data: Voltage Standing Wave Ratio (VSWR) per Antenna\n'
+                 f'{data.site_name} {data.date}')
     
     # Construct 2D arrays for each data type for stat calculations.
     frequency_alldata = np.array([d.freq for d in data.datas])
@@ -446,13 +465,17 @@ def plot_vswr(data: RSAllData, directory: str = '', plot_stats: bool = False):
 
         ax[2].set_title('VSWR and Phase Variation')
         ax2_left = ax[2]
-        ax2_left.plot(data.datas[0].freq/1E+6, rmse_vswr, color='tab:blue', linestyle='--', label='Root Mean Squared Error (RMSE)')
-        ax2_left.plot(data.datas[0].freq/1E+6, mad_vswr, color='tab:blue', linestyle='-', label='Mean Absolute Deviation (MAD)')
+        ax2_left.plot(data.datas[0].freq/1E+6, rmse_vswr, color='tab:blue', linestyle='--', 
+                      label='Root Mean Squared Error (RMSE)')
+        ax2_left.plot(data.datas[0].freq/1E+6, mad_vswr, color='tab:blue', linestyle='-', 
+                      label='Mean Absolute Deviation (MAD)')
         ax2_left.set_ylabel('VSWR', color='tab:blue')
 
         ax2_right = ax[2].twinx()
-        ax2_right.plot(data.datas[0].freq/1E+6, rmse_pha, color='tab:red', linestyle='--', label='Root Mean Squared Error (RMSE)')
-        ax2_right.plot(data.datas[0].freq/1E+6, mad_pha, color='tab:red', linestyle='-', label='Mean Absolute Deviation (MAD)')
+        ax2_right.plot(data.datas[0].freq/1E+6, rmse_pha, color='tab:red', linestyle='--', 
+                       label='Root Mean Squared Error (RMSE)')
+        ax2_right.plot(data.datas[0].freq/1E+6, mad_pha, color='tab:red', linestyle='-', 
+                       label='Mean Absolute Deviation (MAD)')
         ax2_right.set_ylabel('Phase [°]', color='tab:red')
 
         ax[2].set_xlabel('Frequency [MHz]')
@@ -488,7 +511,7 @@ def plot_vswr(data: RSAllData, directory: str = '', plot_stats: bool = False):
     return
 
 
-def plot_skynoise(data: RSAllData, directory: str = '', plot_stats: bool = False):
+def plot_skynoise(data: RSAllData, directory: str = '', filename: str = '', plot_stats: bool = False):
     """
     Create a spectrum plot showing sky noise as power vs frequency. Optionally, a second plot can be
     added to show variance stats in the skynoise datasets plotted.
@@ -500,6 +523,8 @@ def plot_skynoise(data: RSAllData, directory: str = '', plot_stats: bool = False
             and magnitude data.
         directory : str
             The output file directory to save the plot in.
+        filename : str
+            The output file name to write the plot to. Defaults to skynoise_[Site ID]_YYYY-MM-DD.png
         plot_stats : bool
             If true, adds a second plot showing variance stats for the magnitude data. If false,
             only magnitude will be plotted.
@@ -522,17 +547,22 @@ def plot_skynoise(data: RSAllData, directory: str = '', plot_stats: bool = False
     plt.rc('legend', fontsize=SMALL_SIZE)  # legend fontsize
     plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
-    # Make lines in a combination of the following line styles and colours, so there are 40 different line combos
-    # Set line style as follows: linestyle=LINE_STYLES[int(index/NUM_COLOURS)]
+    # Make lines in a combination of the following line styles and colours, so there are 40
+    # different line combos. Set line style as follows:
+    # linestyle=LINE_STYLES[int(index/NUM_COLOURS)]
     LINE_STYLES = ['solid', 'dashed', 'dashdot', 'dotted']
     NUM_COLOURS = 10
 
-    outfile = f'{directory}skynoise_{data.site_code}_{data.date}.png'
+    if filename == '':
+        outfile = f'{directory}skynoise_{data.site_code}_{data.date}.png'
+    else:
+        outfile = f'{directory}{filename}'
     if plot_stats:
         fig, ax = plt.subplots(2, 1, figsize=[13, 10])
     else: 
         fig, ax = plt.subplots(1, 1, figsize=[13, 8])
-    fig.suptitle(f'{data.device.upper()} Data: Sky Noise\n{data.site_name} {data.date}')
+    fig.suptitle(f'{data.device.upper()} Data: Sky Noise\n'
+                 f'{data.site_name} {data.date}')
     
     # Construct 2D arrays for each data type for stat calculations.
     frequency_alldata = np.array([d.freq for d in data.datas])
@@ -566,8 +596,10 @@ def plot_skynoise(data: RSAllData, directory: str = '', plot_stats: bool = False
         mad_mag = np.mean(np.abs(magnitude_alldata - mean_magnitude), 0)
 
         ax[1].set_title('Magnitude Variation')
-        ax[1].plot(data.datas[0].freq/1E+6, rmse_mag, color='tab:blue', linestyle='--', label='Root Mean Squared Error (RMSE)')
-        ax[1].plot(data.datas[0].freq/1E+6, mad_mag, color='tab:blue', linestyle='-', label='Mean Absolute Deviation (MAD)')
+        ax[1].plot(data.datas[0].freq/1E+6, rmse_mag, color='tab:blue', linestyle='--', 
+                   label='Root Mean Squared Error (RMSE)')
+        ax[1].plot(data.datas[0].freq/1E+6, mad_mag, color='tab:blue', linestyle='-', 
+                   label='Mean Absolute Deviation (MAD)')
         ax[1].set_ylabel('Power [dBm]', color='tab:blue')
 
         ax[1].set_xlabel('Frequency [MHz]')
@@ -591,22 +623,32 @@ def plot_skynoise(data: RSAllData, directory: str = '', plot_stats: bool = False
 
 
 def main():
-    parser = argparse.ArgumentParser(description='SuperDARN Canada© -- Engineering Diagnostic Tools Kit: Data Plotting'
-                                                 'Given a set of CSV files this program will generate comparison plots'
-                                                 'for engineering diagnostics.')
-    parser.add_argument('-s', '--site', type=str, required=True,
+    parser = argparse.ArgumentParser(
+            description='SuperDARN Canada© -- Engineering Diagnostic Tools Kit: Data Plotting'
+                        'Given a set of CSV files this program will generate comparison plots'
+                        'for engineering diagnostics.',
+            formatter_class=lambda prog: argparse.RawDescriptionHelpFormatter(prog, 
+                                                                              max_help_position=50, 
+                                                                              width=100)
+    )
+    parser.add_argument('-v', '--verbose', action='store_true', 
+                        help='Print more information.')
+    parser.add_argument('--site', type=str, required=True,
                         help='Radar code of the site this data is from, eg: sas, pgr, rkn...')
-    parser.add_argument('-d', '--directory', type=str, required=True,
+    parser.add_argument('--directory', type=str, required=True,
                         help='Directory containing CSV files with data to be plotted.')
-    parser.add_argument('-m', '--mode', type=str, required=True, choices=['vswr','rxpath','skynoise'],
+    parser.add_argument('--mode', type=str, required=True, choices=['vswr','rxpath','skynoise'],
                         help='Select the type of plot to make: (vswr, rxpath, skynoise).')
-    parser.add_argument('-t', '--device', type=str, required=True, choices=['zvh4','trvna','mdo3034'],
-                        help='Measurement device that collected the data to plot. Options (zvh4, trvna, mdo3034)')
-    parser.add_argument('-o', '--outdir', type=str, default='', 
+    parser.add_argument('--device', type=str, required=True, choices=['zvh4','trvna','mdo3034'],
+                        help='Measurement device that collected the data to plot. Options (zvh4, '
+                             'trvna, mdo3034)')
+    parser.add_argument('--outdir', type=str, default='', 
                         help='Directory to save output plots.')
-    parser.add_argument('-p', '--pattern', type=str, default='', 
+    parser.add_argument('--filename', type=str, default='',
+                        help='Specify the filename of the output plot.')
+    parser.add_argument('--pattern', type=str, default='', 
                         help='File naming pattern (eg. sas-vswr-, pgr-rxpath-).')
-    parser.add_argument('-f', '--filter', type=str, nargs='+', 
+    parser.add_argument('--filter', type=str, nargs='+', 
                         help='Filter out files found in the specified directory by listing any '
                              'number of expressions to be filtered out. Example: "--filter 18 19" '
                              'will omit files containing 18 and 19 in the filename.')
@@ -615,10 +657,6 @@ def main():
     parser.add_argument('--plot_stats', action='store_true', 
                         help='Adds an extra plot showing the variance in the magnitude/vswr and '
                              'phase across all plotted data.')
-    parser.add_argument('-v', '--verbose', action='store_true', 
-                        help='Print more information.')
-
-
 
     args = parser.parse_args()
 
@@ -630,6 +668,8 @@ def main():
         "cly" : "Clyde River",
         "lab" : "SuperDARN Lab"
     }
+    vna_devices = ['zvh4', 'trvna']
+    spectrum_devices = ['zvh4', 'mdo3034']
 
     site_code = args.site.lower()
     if site_code in radar_codes:
@@ -641,28 +681,32 @@ def main():
     outdir = args.outdir
     if outdir == '':
         outdir = directory
+    filename = args.filename
     pattern = args.pattern
     date = args.date
     verbose = args.verbose
     device = args.device
     mode = args.mode
+    if (mode in ['vswr', 'rxpath'] and device not in vna_devices) or \
+                        (mode in ['skynoise'] and device not in spectrum_devices):
+        print(f'Error: device specified ({device}) cannot collect {mode} data')
     if args.filter is None:
         filter_list = []
     else:
         filter_list = args.filter
     plot_stats = args.plot_stats
 
+
     data = read_data(directory=directory, pattern=pattern, date=date, verbose=verbose, 
                      site_code=site_code, site_name=site_name, device=device, mode=mode, 
                      filter_list=filter_list)
 
-
     if args.mode == 'vswr':
-        plot_vswr(data, directory=outdir, plot_stats=plot_stats)
+        plot_vswr(data, directory=outdir, filename=filename, plot_stats=plot_stats)
     elif args.mode == 'rxpath':
-        plot_rxpath(data, directory=outdir, plot_stats=plot_stats)
+        plot_rxpath(data, directory=outdir, filename=filename, plot_stats=plot_stats)
     elif args.mode == "skynoise":
-        plot_skynoise(data, directory=outdir, plot_stats=plot_stats)
+        plot_skynoise(data, directory=outdir, filename=filename, plot_stats=plot_stats)
     else:
         print('Select a mode: vswr, rxpath, or skynoise') 
 
