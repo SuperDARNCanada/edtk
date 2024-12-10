@@ -1,18 +1,17 @@
 """
-SuperDARN Canada© -- Engineering Diagnostic Tools Kit: (Vector Network Analyzer Data Plotting)
+SuperDARN Canada© -- Engineering Diagnostic Tools Kit: Data Plotting
 
-Author: Adam Lozinsky
-Date: October 6, 2021
+Author: Adam Lozinsky, Theodore Kolkman, Saif Marei 
+Date: December 10, 2024 
 Affiliation: University of Saskatchewan
 
-Typically SuperDARN engineers will make a series of measurements for each antennas RF path using a
-Rohde & Schwarz ZVH or similar vector network analyzer (I.E. Copper Mountain TR VNA). These
-measurements can be converted into .csv files. The files contain different data based on the
-instrument settings, but it is per antenna. It is preferred to plot all the data for each antenna on
-one plot so differences and outliers are easily visible. This tool will produce those common plots
-from the .csv files.
+SuperDARN engineers make a series of measurements for each antennas RF path using a Rohde & Schwarz
+ZVH or Copper Mountain TR VNA. These measurements can be converted into or recorded as .csv files.
+The files contain different data based on the instrument settings, but it is per antenna. It is
+preferred to plot all the data for each antenna on one plot so differences and outliers are easily
+visible. This tool will produce those common plots from the .csv files.
 
-Use 'python zvh_tools.py --help' to discover options if running directly from command line.
+Use 'python zvh_plots.py --help' to discover options if running directly from command line.
 """
 
 from dataclasses import dataclass, field
@@ -624,8 +623,8 @@ def plot_skynoise(data: RSAllData, directory: str = '', filename: str = '', plot
 
 def main():
     parser = argparse.ArgumentParser(
-            description='SuperDARN Canada© -- Engineering Diagnostic Tools Kit: Data Plotting'
-                        'Given a set of CSV files this program will generate comparison plots'
+            description='SuperDARN Canada© -- Engineering Diagnostic Tools Kit: Data Plotting\n\n'
+                        'Given a set of CSV files, this program will generate comparison plots '
                         'for engineering diagnostics.',
             formatter_class=lambda prog: argparse.RawDescriptionHelpFormatter(prog, 
                                                                               max_help_position=50, 
