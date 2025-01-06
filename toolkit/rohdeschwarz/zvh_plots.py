@@ -31,6 +31,7 @@ class RSData:
     name: str
     freq: float
     vswr: float
+    vswr_antenna: float
     magnitude: float
     phase: float
     phase_unwrapped: float
@@ -209,8 +210,11 @@ def read_data(
                 phase_unwrapped = pd.Series(np.unwrap(phase, period=360))
                 verbose and print(f'\t-PHASE data found in: {name}')
 
+        if vswr is not None:
+            vswr_antenna = calculate_vswr_at_antenna(freq, vswr)
+
         data = RSData(name=name, freq=freq, vswr=vswr, magnitude=magnitude, phase=phase, 
-                      phase_unwrapped=phase_unwrapped)
+                      phase_unwrapped=phase_unwrapped, vswr_antenna=vswr_antenna)
         all_data.names.append(name)
         all_data.datas.append(data)
 
@@ -231,6 +235,52 @@ def calculate_ticks(ax, ticks, round_to=0.1, center=False):
         lowerbound = lowerbound - offset
     values = np.linspace(lowerbound, lowerbound + dy_new, ticks)
     return values*round_to
+
+
+def calculate_vswr_at_antenna(freq: List[float], vswr_shack: List[float], feedline_type: str = 'lmr-400', feedline_length: float = 165.75):
+    """
+    Given a VSWR measurement taken at the shack, calculate the actual VSWR seen at the balun (and
+    antenna) by accounting for the loss in the feedline cable. This calculation is derived from
+    equation 10 in section 20.5 of the ARRL handbook.
+
+    Parameters
+    ----------
+        freq: List of floats
+            The frequencies each of the corresponding VSWR measurements were taken at
+        vswr_shack: List of floats
+            The VSWR measurements, taken at the shack. These measurements include the loss from the
+            antenna feedline, as well as the loss at the antenna itself.
+        feedline_type: str
+            The type of antenna feedline to calculate for, the options are 'db8', 'lmr-400', 'drf-400'
+            (default is db8). This will indicate how the antenna loss will be calculated.
+        feedline_length: float
+            The total length of antenna feedline from the shack to the balun. Default is 165.75 m
+            (measured value from Saskatoon via Distance-to-Fault measurement in 2014)
+    """
+
+    # Calculate the matched line loss (ML) in dB
+    if feedline_type == 'db8':
+        # Linearly interpolate the attenuation using the DB8 cable datasheet values
+        datasheet_freq = [1, 10, 50, 400, 700, 900, 1000] * 1e6             # MHz
+        datasheet_atten = [0.66, 1.97, 4.27, 13.45, 21.33, 24.93, 26.25]    # dB/100m
+        cable_loss_per_meter = np.interp(freq, datasheet_freq, datasheet_atten) / 100   # dB/m
+        cable_loss = cable_loss_per_meter * feedline_length     # dB
+    elif feedline_type == 'lmr-400' or feedline_type == 'drf-400':
+        # Equation from LMR-400 datasheet
+        cable_loss_per_100ft = 0.122290 * np.sqrt(freq / 1e6) + 0.000260 * (freq / 1e6) # dB/100ft
+        cable_loss_per_meter = (cable_loss_per_100ft / 0.3048) / 100                    # dB/m
+        cable_loss = (cable_loss_per_100ft / 0.3048) / 100 * feedline_length            # dB 
+    else:
+        print(f"Error - unknown feedline type: {feedline_type}. Exiting...")
+        exit(1)
+
+    # Calculate the VSWR using the derived equations
+    return_loss = -20 * np.log10(np.divide(vswr_shack - 1, vswr_shack + 1))
+    adjusted_loss = return_loss - 2 * cable_loss
+    adjusted_reflection = np.power(10, -adjusted_loss/20)
+    vswr_antenna = np.divide(1 + adjusted_reflection, 1 - adjusted_reflection)
+
+    return vswr_antenna
 
 
 def plot_rxpath(data: RSAllData, directory: str = '', filename: str = '', plot_stats: bool = False):
@@ -434,6 +484,7 @@ def plot_vswr(data: RSAllData, directory: str = '', filename: str = '', plot_sta
     for index, name in enumerate(data.names):
         ax[0].plot(data.datas[index].freq/1E+6, data.datas[index].vswr, label=name,
                    linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
+        ax[0].plot(data.datas[index].freq/1E+6, data.datas[index].vswr_antenna, label=f"{name}_adjusted")
         ax[1].plot(data.datas[index].freq/1E+6, data.datas[index].phase, label=name,
                    linestyle=LINE_STYLES[int(index/NUM_COLOURS)])
 
@@ -451,9 +502,10 @@ def plot_vswr(data: RSAllData, directory: str = '', filename: str = '', plot_sta
     ymax = np.ceil(np.max(vswr_alldata))   # Adjust limits to add whitespace above/below data
 
     # Set base plot limits for vswr plot
-    print(ymax)
     if ymax < 3:
         ymax = 3 # dB
+
+    ymax = 4
 
     if plot_stats:
         # Plot data variance statistics
