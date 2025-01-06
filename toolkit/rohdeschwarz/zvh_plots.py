@@ -95,8 +95,8 @@ def read_data(
     files = glob.glob(f"{directory}/*/{pattern}*.csv")
     if files == []:
         files = sorted(glob.glob(f"{directory}/{pattern}*.csv"))
-    verbose and print(f"Following files found in {directory}:\n", 
-                      [os.path.basename(f) for f in files])
+    if verbose:
+        print(f"Following files found in {directory}:\n", [os.path.basename(f) for f in files])
 
     filtered_files = []
     print(filter_list)
@@ -104,7 +104,8 @@ def read_data(
         for file in files:
             if filter in os.path.basename(file):
                 filtered_files.append(file)
-                verbose and print(f"Filter removed file: {file}")
+                if verbose:
+                    print(f"Filter removed file: {file}")
     files = [f for f in files if f not in filtered_files]
 
     all_data = RSAllData()
@@ -115,7 +116,8 @@ def read_data(
 
     for file in files:
         name = os.path.basename(file).replace('.csv', '')
-        verbose and print(f'loading file: {file}')
+        if verbose: 
+            print(f'loading file: {file}')
         if device == 'zvh4':
             # Determine which row the data starts on
             df = pd.read_csv(file, encoding='cp1252')
@@ -196,18 +198,22 @@ def read_data(
             # ZVH4 files contain duplicates of data - only record it the first time.
             if 'freq' in key.lower() and freq is None:
                 freq = pd.to_numeric(df[key], errors='coerce')
-                verbose and print(f'\t-FREQUENCY data found in: {name}')
+                if verbose:
+                    print(f'\t-FREQUENCY data found in: {name}')
             if 'vswr' in key.lower() and vswr is None:
                 vswr = pd.to_numeric(df[key], errors='coerce')
-                verbose and print(f'\t-VSWR data found in: {name}')
+                if verbose:
+                    print(f'\t-VSWR data found in: {name}')
             if ('mag' in key.lower() or 'fd max' in key.lower()) and magnitude is None:
                 magnitude = pd.to_numeric(df[key], errors='coerce')
-                verbose and print(f'\t-MAGNITUDE data found in: {name}')
+                if verbose:
+                    print(f'\t-MAGNITUDE data found in: {name}')
             if 'pha' in key.lower() and phase is None:
                 phase = pd.to_numeric(df[key], errors='coerce')
                 phase = (phase + 180) % 360 - 180  # Ensure phase values are between -180 to 180 deg
                 phase_unwrapped = pd.Series(np.unwrap(phase, period=360))
-                verbose and print(f'\t-PHASE data found in: {name}')
+                if verbose:
+                    print(f'\t-PHASE data found in: {name}')
 
         data = RSData(name=name, freq=freq, vswr=vswr, magnitude=magnitude, phase=phase, 
                       phase_unwrapped=phase_unwrapped)
@@ -451,7 +457,6 @@ def plot_vswr(data: RSAllData, directory: str = '', filename: str = '', plot_sta
     ymax = np.ceil(np.max(vswr_alldata))   # Adjust limits to add whitespace above/below data
 
     # Set base plot limits for vswr plot
-    print(ymax)
     if ymax < 3:
         ymax = 3 # dB
 
@@ -671,10 +676,7 @@ def main():
     spectrum_devices = ['zvh4', 'mdo3034']
 
     site_code = args.site.lower()
-    if site_code in radar_codes:
-        site_name = radar_codes[site_code]
-    else:
-        site_name = args.site
+    site_name = radar_codes.get(site_code, args.site)
     
     directory = args.directory
     outdir = args.outdir
