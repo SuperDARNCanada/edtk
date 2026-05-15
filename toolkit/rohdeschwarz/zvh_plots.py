@@ -153,11 +153,14 @@ def read_data(
             # OR
             # Frequency |  Re(Mag)  |  Im(Mag)  | Re(Phase) | Im(Phase)    -- for rxpath
             # Either way we need columns 0, 1 and 3 (don't need imaginary parts)
-            df_temp = pd.read_csv(file)
+
+            # Added latin1 encoding for csv type ISO-8859-1
+            df_temp = pd.read_csv(file, encoding='latin1', comment='!', header=None)
 
             # Check if headers have been manually added to the csv file
             first_row = df_temp.head(0)
-            if 'freq' in str(first_row).lower():
+            header = str(first_row).lower()
+            if header in ('stimulus', 'freq'):
                 df = df_temp
             else:
                 df = {}
@@ -165,7 +168,7 @@ def read_data(
                 for key in df_temp.keys():
                     key_array.append(key)
                 df['Frequency [Hz]'] = df_temp[key_array[0]]
-                df['Phase'] = df_temp[key_array[3]]
+                df['Phase'] = df_temp[key_array[2]]
                 if 'vswr' in mode:
                     df['VSWR'] = df_temp[key_array[1]]
                 elif 'rxpath' in mode:
