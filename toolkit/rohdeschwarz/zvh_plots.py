@@ -153,11 +153,14 @@ def read_data(
             # OR
             # Frequency |  Re(Mag)  |  Im(Mag)  | Re(Phase) | Im(Phase)    -- for rxpath
             # Either way we need columns 0, 1 and 3 (don't need imaginary parts)
-            df_temp = pd.read_csv(file)
+
+            # Added latin1 encoding for csv type ISO-8859-1
+            df_temp = pd.read_csv(file, encoding='latin1', comment='!', header=None)
 
             # Check if headers have been manually added to the csv file
             first_row = df_temp.head(0)
-            if 'freq' in str(first_row).lower():
+            header = str(first_row).lower()
+            if header in ('stimulus', 'freq'):
                 df = df_temp
             else:
                 df = {}
@@ -165,7 +168,7 @@ def read_data(
                 for key in df_temp.keys():
                     key_array.append(key)
                 df['Frequency [Hz]'] = df_temp[key_array[0]]
-                df['Phase'] = df_temp[key_array[3]]
+                df['Phase'] = df_temp[key_array[2]]
                 if 'vswr' in mode:
                     df['VSWR'] = df_temp[key_array[1]]
                 elif 'rxpath' in mode:
@@ -307,8 +310,7 @@ def plot_rxpath(data: RSAllData, directory: str = '', filename: str = '', plot_s
 
     # Plot average mag and phase
     mean_magnitude = np.mean(magnitude_alldata, 0)
-    mean_phase_unwrapped = np.mean(phase_unwrapped_alldata, 0) # Calculate mean with unwrapped data
-    mean_phase = (mean_phase_unwrapped + 180) % 360 - 180      # Plot the phase mean wrapped
+    mean_phase = np.angle(np.mean(np.exp(1j * np.deg2rad(phase_unwrapped_alldata)), axis=0), deg=True) # Calculate mean with unwrapped data, np.angle returns wrapped [-180, 180] naturally
     ax[0].plot(data.datas[0].freq/1E+6, mean_magnitude, '--k', label='mean')
     ax[1].plot(data.datas[0].freq/1E+6, mean_phase, '--k', label='mean')
 
@@ -328,11 +330,21 @@ def plot_rxpath(data: RSAllData, directory: str = '', filename: str = '', plot_s
 
 
     if plot_stats:
+        # Convert unwrapped phases to complex plane
+        complex_phase_unwrapped_alldata = np.exp(1j * np.deg2rad(phase_unwrapped_alldata))
+        complex_mean_phase_unwrapped = np.exp(1j * np.deg2rad(mean_phase))
+
+        # Divide (not subtract) to get the angular difference
+        complex_phase_difference_unwrapped = complex_phase_unwrapped_alldata / complex_mean_phase_unwrapped
+
+        # Get angle and convert back to degrees. Returned wrapped naturally
+        phase_difference = np.angle(complex_phase_difference_unwrapped, deg=True)
+
         # Plot data variance statistics
         rmse_mag = np.sqrt(np.mean(np.square(magnitude_alldata - mean_magnitude), 0))
-        rmse_pha = np.sqrt(np.mean(np.square(phase_unwrapped_alldata - mean_phase_unwrapped), 0))
+        rmse_pha = np.sqrt(np.mean(np.square(phase_difference), 0))
         mad_mag = np.mean(np.abs(magnitude_alldata - mean_magnitude), 0)
-        mad_pha = np.mean(np.abs(phase_unwrapped_alldata - mean_phase_unwrapped), 0)
+        mad_pha = np.mean(np.abs(phase_difference), 0)
 
         ax[2].set_title('Magnitude and Phase Variation')
         ax2_left = ax[2]
