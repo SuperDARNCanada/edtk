@@ -1,0 +1,78 @@
+#!/bin/bash
+# Copyright 2022 SuperDARN Canada, University of Saskatchewan
+# Author: Theodore Kolkman
+#
+# Script that pings the Borealis computer, and sends a Slack message alert if the computer is
+# unreachable. This script should be run via site CD or DDS computer, so that Slack alerts are only
+# sent if only Borealis is unreachable, but CD or DDS are still online. If the whole site is down,
+# there is little we can do, and we don't want to be notified.
+#
+# Dependencies:
+#   - mutt (Installed with zypper)
+#   - postfix enabled and started 
+#   - BOREALIS_IP defined in ~/.bashrc
+#   - Email-to-text addresses defined correctly
+#   - Line 'myorigin = smtp.servername.suffix' must be added to /etc/postfix/main.cf to stop cell
+#     providers from blocking the computer sending via mutt
+#   - SLACK_WEBHOOK defined in ~/.bashrc to a valid Slack webhook URL
+#
+# This script should be ran as a systemd daemon. An example .service file is shown below:
+# [Unit]
+# Description=Borealis down alert daemon
+# 
+# [Service]
+# User=transfer
+# ExecStart=/home/transfer/edtk/telemetry/alerts/borealis_down
+# Restart=always
+# 
+# [Install]
+# WantedBy=multi-user.target
+
+
+###################################################################################################
+
+source "${HOME}/.bashrc"
+source "${HOME}/edtk/telemetry/alerts/config.sh"    # Load in alert config file
+
+# Get SLACK_WEBHOOK from .bashrc
+
+MESSAGE_SENT="false"    # Flag to signal a text message has been sent
+PING_FAIL_COUNT=0       # Number of times ping has failed to reach borealis computer
+THRESHOLD=10            # Number of times ping must fail before message is sent
+SLEEP_TIME=59           # How long program waits between pings in seconds
+
+MESSAGE=":rotating_light: Alert :rotating_light: ${RADARID}borealis is down"
+
+LOGFILE="${HOME}/logs/borealis_down.log"
+
+###################################################################################################
+
+exec &>> $LOGFILE
+
+printf "\nDaemon $0 starting on $(hostname) for ${RADARID}\n"
+date --utc "+%Y%m%d %H:%M:%S UTC"
+printf "\n\n"
+
+while true; do
+    # If ping fails, Borealis is unreachable and return value will be 1
+    ping -c1 -W1 $BOREALIS_IP
+    if [[ $? -eq 0 ]]; then
+        MESSAGE_SENT="false"
+        PING_FAIL_COUNT=0
+    else
+        PING_FAIL_COUNT=$((PING_FAIL_COUNT + 1))
+        echo "$(date --utc "+%Y%m%d %H:%M:%S") Borealis is down, ping number $PING_FAIL_COUNT"
+    fi
+
+    # Send text alert if Borealis unreachable, and an alert hasn't already been sent
+    if [[ $PING_FAIL_COUNT -ge $THRESHOLD ]] && [[ $MESSAGE_SENT == "false" ]]; then
+        date --utc "+%Y%m%d %H:%M:%S UTC"
+        echo "Sending text alerts to: ${SLACK_WEBHOOK}"
+
+        curl --header "Content-type: application/json" --data "{'text':'${MESSAGE}'}" $SLACK_WEBHOOK
+
+        MESSAGE_SENT="true"
+    fi
+    sleep $SLEEP_TIME
+    printf "\n"
+done
