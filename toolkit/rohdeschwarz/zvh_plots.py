@@ -21,6 +21,7 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import re
 from datetime import datetime
 from typing import List, Optional
 
@@ -153,6 +154,15 @@ def read_data(
             # OR
             # Frequency |  Re(Mag)  |  Im(Mag)  | Re(Phase) | Im(Phase)    -- for rxpath
             # Either way we need columns 0, 1 and 3 (don't need imaginary parts)
+            
+            # TRVNA now records specific time data was collected. Use this for the date instead.
+            with open(file, encoding='latin-1') as f:
+                match = re.search(r'Date:\s*(\d+/\d+/\d+)', f.read(200))
+                if match is not None:
+                    try:
+                        all_data.date = datetime.strptime(match.group(1), "%m/%d/%Y").strftime("%Y-%m-%d")
+                    except ValueError:
+                        pass
 
             # Added latin1 encoding for csv type ISO-8859-1
             df_temp = pd.read_csv(file, encoding='latin1', comment='!', header=None)
@@ -669,7 +679,8 @@ def main():
                              'number of expressions to be filtered out. Example: "--filter 18 19" '
                              'will omit files containing 18 and 19 in the filename.')
     parser.add_argument('--date', type=str, default='1970-01-01', 
-                        help='date of the data to be plotted (yyyy-mm-dd)')
+                        help='Date of the data to be plotted (yyyy-mm-dd), used only if the file '
+                             'itself does not contain a date.')
     parser.add_argument('--plot_stats', action='store_true', 
                         help='Adds an extra plot showing the variance in the magnitude/vswr and '
                              'phase across all plotted data.')
