@@ -185,13 +185,23 @@ def read_data(
                     df['Magnitude'] = df_temp[key_array[1]]
 
         elif device == 'mdo3034':
-            df = pd.read_csv(file)
-            skiprows = 0
-            for index, row in df.iterrows():
-                skiprows += 1
-                if 'fd max' in str(row).lower():
-                    skiprows += 1
+            with open(file, encoding='cp1252') as f:
+                lines = f.read().splitlines()
+
+            skiprows = None
+            for i, line in enumerate(lines):
+                if 'fd max' in line.lower():
+                    # Scope-native format: header is the line after 'fd max'
+                    skiprows = i + 1
                     break
+                if line.split(',')[0].strip().lower() == 'frequency':
+                    # Saved reference waveform (USB export): this line is the header
+                    skiprows = i
+                    break
+
+            if skiprows is None:
+                print(f'Warning: no FD Max or FREQUENCY header found in {file}, skipping')
+                continue
 
             df = pd.read_csv(file, skiprows=skiprows, encoding='cp1252')
 
@@ -217,7 +227,8 @@ def read_data(
                 vswr = pd.to_numeric(df[key], errors='coerce')
                 if verbose:
                     print(f'\t-VSWR data found in: {name}')
-            if ('mag' in key.lower() or 'fd max' in key.lower()) and magnitude is None:
+            if ('mag' in key.lower() or 'fd max' in key.lower()
+                    or key.lower().startswith('ref')) and magnitude is None:
                 magnitude = pd.to_numeric(df[key], errors='coerce')
                 if verbose:
                     print(f'\t-MAGNITUDE data found in: {name}')
@@ -587,6 +598,7 @@ def plot_skynoise(data: RSAllData, directory: str = '', filename: str = '', plot
         fig, ax = plt.subplots(2, 1, figsize=[13, 10])
     else: 
         fig, ax = plt.subplots(1, 1, figsize=[13, 8])
+        ax = [ax]
     fig.suptitle(f'{data.device.upper()} Data: Sky Noise\n'
                  f'{data.site_name} {data.date}')
     
